@@ -5,6 +5,7 @@
 # todo модуль штрафа произведения (+)
 # todo рандомные углы при проекции
 # todo рандомные пиксели изображения для регуляризации произведением
+from __future__ import print_function
 
 import numpy as np
 import xraylib_np as xraylib
@@ -19,28 +20,31 @@ import sys
 
 xraylib.XRayInit()
 
-input_dir = '../../testdata/whitereconstruct/input'
+input_dir = '../testdata/whitereconstruct/input'
 energy_grid = np.loadtxt(os.path.join(input_dir, 'grid.txt'))
 source = np.loadtxt(os.path.join(input_dir, 'source.txt'))
 
 
-
-pixel_size = 3e-5 # 0.05 in icmv experiments
+pixel_size = 3e-5  # 0.05 in icmv experiments
 ph_size = (256, 256)
 n_angles = 180
 element_numbers = np.array([22, 28])
 
-gt_dir = '../../testdata/whitereconstruct/correct'
-gt_concentrations = [np.loadtxt(os.path.join(gt_dir, f)) for f in os.listdir(gt_dir)]
-f = [np.loadtxt(os.path.join(input_dir, 'f_%02d.txt' % en)) for en in element_numbers]
+gt_dir = '../testdata/whitereconstruct/correct'
+gt_concentrations = [np.loadtxt(os.path.join(gt_dir, f))
+                     for f in os.listdir(gt_dir)]
+f = [np.loadtxt(os.path.join(input_dir, 'f_%02d.txt' % en))
+     for en in element_numbers]
+
 
 def absorption(energy, element):
-	element = np.array(element)
-	dens = xraylib.ElementDensity(element)
-	cross = xraylib.CS_Total(element, energy)
-	return dens.reshape(-1,1) * cross
+    element = np.array(element)
+    dens = xraylib.ElementDensity(element)
+    cross = xraylib.CS_Total(element, energy)
+    return dens.reshape(-1, 1) * cross
 
-element_absorptions = absorption(energy_grid[:,0], element_numbers)
+
+element_absorptions = absorption(energy_grid[:, 0], element_numbers)
 
 sinogram = np.loadtxt(os.path.join(input_dir, 'white_ht.txt'))
 
@@ -48,12 +52,14 @@ sinogram = np.loadtxt(os.path.join(input_dir, 'white_ht.txt'))
 proj_geom = astra.create_proj_geom(
     'parallel',
     1.0,
-    int(np.sqrt(2)*ph_size[0] + 1),  # This should be enough to register full object.
+    # This should be enough to register full object.
+    int(np.sqrt(2) * ph_size[0] + 1),
     np.linspace(0, np.pi, n_angles)
 )
 vol_geom = astra.create_vol_geom(*ph_size)
 projector = astra.create_projector('linear', proj_geom, vol_geom)
 proj_shape = (n_angles, proj_geom['DetectorCount'])
+
 
 class AstraProxy:
     def __init__(self, dims):
@@ -81,7 +87,6 @@ class AstraProxy:
             raise NotImplementedError
 
 
-
 def gpu_fp(pg, vg, v, proj_id):
     ap = AstraProxy(len(v.shape))
     v_id = ap.data_create('-vol', vg, v)
@@ -97,6 +102,7 @@ def gpu_fp(pg, vg, v, proj_id):
     ap.data_delete(rt_id)
     ap.data_delete(v_id)
     return out
+
 
 def gpu_bp(pg, vg, rt, proj_id, supersampling=1):
     ap = AstraProxy(len(rt.shape))
@@ -115,7 +121,7 @@ def gpu_bp(pg, vg, rt, proj_id, supersampling=1):
     return out
 
 
-def cpu_sirt(pg, vg, proj_id,sm, n_iters=100):
+def cpu_sirt(pg, vg, proj_id, sm, n_iters=100):
     ap = AstraProxy(len(sm.shape))
     rt_id = ap.data_create('-sino', pg, data=sm)
     v_id = ap.data_create('-vol', vg)
@@ -131,6 +137,7 @@ def cpu_sirt(pg, vg, proj_id,sm, n_iters=100):
     ap.data_delete(rt_id)
     ap.data_delete(v_id)
     return out
+
 
 def cpu_fbp(pg, vg, proj_id, sm, n_iters=100):
     ap = AstraProxy(len(sm.shape))
@@ -150,18 +157,24 @@ def cpu_fbp(pg, vg, proj_id, sm, n_iters=100):
     return out
 # ---------------
 
+
 conc_shape = (len(element_numbers), ph_size[0], ph_size[1])
 concentrations = np.zeros(shape=conc_shape, dtype=np.float64)
 
-concentrations = scipy.stats.truncnorm(a=-0.1, b=0.1, scale=0.1).rvs(size=conc_shape) + 0.09
+concentrations = scipy.stats.truncnorm(
+    a=-0.1, b=0.1, scale=0.1).rvs(size=conc_shape) + 0.09
+
 
 def integrate(ar, energy_grid):
     res_shape = ar.shape[:-1]
     num_en = energy_grid.shape[0]
-    return np.sum(ar.reshape(-1, num_en) * energy_grid[:,1].reshape(1,-1), axis=1).reshape(res_shape)
+    return np.sum(ar.reshape(-1, num_en) * energy_grid[:, 1]
+                  .reshape(1, -1), axis=1).reshape(res_shape)
+
 
 sum_energy = integrate(source, energy_grid)
 source /= sum_energy
+
 
 def FP_white(energy, source, pixel_size, concentrations):
     global proj_geom
@@ -169,42 +182,52 @@ def FP_white(energy, source, pixel_size, concentrations):
     global projector
     K = len(concentrations)
 
-    FP = lambda x: gpu_fp(proj_geom, vol_geom, x, projector)
+    def FP(x):
+        gpu_fp(proj_geom, vol_geom, x, projector)
+
     conc_fp = np.array([FP(c) for c in concentrations])
     flat_fp = conc_fp.reshape(K, -1, 1)
     ea = element_absorptions.reshape(K, 1, -1)
-    print('flat_fp ', flat_fp.shape, ' * ea ', ea.shape, ' = ', (flat_fp * ea).shape)
+    print('flat_fp ', flat_fp.shape, ' * ea ',
+          ea.shape, ' = ', (flat_fp * ea).shape)
     exp_arg = -pixel_size * np.sum(flat_fp * ea, axis=0)
 
     # plt.imshow(exp_arg.reshape(proj_shape[0], proj_shape[1], -1)[:,:, 10])
     # plt.show()
     exp = np.exp(exp_arg)
     print('exp.shape is :', exp.shape)
-    I = integrate(source.reshape(1,-1) * exp, energy)
-    return I, exp_arg, exp, flat_fp
+    Integral = integrate(source.reshape(1, -1) * exp, energy)
+    return Integral, exp_arg, exp, flat_fp
 
-sinogram, exp_arg, exp, flat_fp, = FP_white(energy_grid, source, pixel_size, gt_concentrations)
+
+sinogram, exp_arg, exp, flat_fp, = FP_white(
+    energy_grid, source, pixel_size, gt_concentrations)
+
 
 def calc_mu(energy, source, exp, element_absorptions):
 
     mu = np.array([-integrate(
-        source.reshape(1, -1) * pixel_size * exp * ea.reshape(1,-1),
-        energy) 
+        source.reshape(1, -1) * pixel_size * exp * ea.reshape(1, -1),
+        energy)
         for ea in element_absorptions])
 
     return mu
+
 
 alpha = 0.05
 beta_reg = 0.1
 
 
 bp_conc_buffer = np.zeros_like(concentrations)
+
+
 def BP_white(energy, source, exp, concentrations, Q):
     mu = calc_mu(energy, source, exp, element_absorptions)
     global bp_conc_buffer
     conc = bp_conc_buffer
 
-    BP = lambda x: gpu_bp(proj_geom, vol_geom, x, projector)
+    def BP(x):
+        gpu_bp(proj_geom, vol_geom, x, projector)
 
     bp_arg = Q * mu
 
@@ -212,15 +235,19 @@ def BP_white(energy, source, exp, concentrations, Q):
         conc[k] = - BP(bp_arg[k].reshape(proj_shape))
     return conc, mu
 
+
 c = np.array(concentrations)
 
 fp = None
 
 uneq_reg_buffer = np.zeros_like(concentrations)
+
+
 def calc_uneq_reg_grad(c):
     for i, cc in enumerate(uneq_reg_buffer):
         cc = c[np.arange(len(c)) != i].sum(axis=0)
     return uneq_reg_buffer
+
 
 def Iteration(c):
     global fp
@@ -236,15 +263,15 @@ def Iteration(c):
 
     hough_loss = np.linalg.norm(q)
 
-
     np.linalg.norm(beta_reg * reg_grad)
     full_loss = hough_loss + reg_loss
-    return c, mu, q, full_loss
+    return c, mu, q, full_loss, reg_grad, reg_loss
 
 try:
     os.mkdir('exp3')
 except:
-    pass;
+    pass
+
 
 def showres(res1, res2, iter_num=None, suffix='iteration'):
     plt.figure(1)
@@ -255,7 +282,7 @@ def showres(res1, res2, iter_num=None, suffix='iteration'):
     plt.imshow(res1[1])
 
     plt.subplot(233)
-    plt.imshow(np.clip(np.around(res1[0]/res1[1], 4), -0.5, 2.0))
+    plt.imshow(np.clip(np.around(res1[0] / res1[1], 4), -0.5, 2.0))
 
     plt.subplot(234)
     plt.imshow(res2[0])
@@ -264,7 +291,7 @@ def showres(res1, res2, iter_num=None, suffix='iteration'):
     plt.imshow(res2[1])
 
     plt.subplot(236)
-    plt.imshow(np.around(res2[0]/res2[1], 4))
+    plt.imshow(np.around(res2[0] / res2[1], 4))
     # plt.pause(0.1)
     # plt.hold(hold)
     if iter_num is not None:
@@ -278,15 +305,17 @@ iters = 100
 stat = np.zeros(shape=(iters, 2 + len(concentrations)), dtype=np.float64)
 
 for i in xrange(iters):
-    c, mu, q, loss = Iteration(c)
+    c, mu, q, loss, reg_loss, reg_grad = Iteration(c)
     # showres(mu.reshape(2, *proj_shape), i, 'mu')
     showres(c, mu.reshape(2, *proj_shape), i)
+    print('reg loss is ', reg_loss)
+
     c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
     sum_acc = np.linalg.norm(c - gt_concentrations)
     stat[i, :] = np.array([loss, sum_acc] + [ac for ac in c_acc])
 
-    print 'iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' % \
-        (i, c.min(), c.max(), loss)
+    print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
+          (i, c.min(), c.max(), loss))
 
 plt.figure(2)
 
@@ -323,19 +352,19 @@ sirt_res = cpu_sirt(proj_geom, vol_geom, projector, mono_sino)
 fbp_res = cpu_fbp(proj_geom, vol_geom, projector, mono_sino)
 
 plt.figure()
-plt.subplot(2,2,1)
+plt.subplot(2, 2, 1)
 plt.imshow(mono_sino)
 plt.title('non_log fp')
 
-plt.subplot(2,2,2)
+plt.subplot(2, 2, 2)
 plt.imshow(mono_sino)
 plt.title('log fp mono_sino')
 
-plt.subplot(2,2,3)
+plt.subplot(2, 2, 3)
 plt.imshow(sirt_res)
 plt.title('SIRT 100 iters')
 
-plt.subplot(2,2,4)
+plt.subplot(2, 2, 4)
 plt.imshow(fbp_res)
 plt.title('FBP')
 
@@ -345,8 +374,9 @@ plt.show()
 # todo проверить размерности и переходы нормировочных коэффициентов
 # при дифференциировании. Установить причину больших чисел.
 
-# лол - фантом норм восстанавливается и без "белого пучка". Нужен фантом на 
+# лол - фантом норм восстанавливается и без "белого пучка". Нужен фантом на
 # котором проявляются артефакты.
 # 1) спектр источника сделать с более выреженными пиками
 # 2) фантом взять а-ля квадрат с включениями
-# 3) сделать разбиение на случайные подзоны и апдейт текущего состояния по подзонам.
+# 3) сделать разбиение на случайные подзоны и апдейт текущего состояния по
+# подзонам.
