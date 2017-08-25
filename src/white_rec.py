@@ -248,7 +248,8 @@ def calc_uneq_reg_grad(c):
         uneq_reg_buffer[i] = c[np.arange(len(c)) != i].sum(axis=0)
     return uneq_reg_buffer
 
-bf = batch_filter.BatchFilter(concentrations.shape[1:], (6, 6))
+#bf = batch_filter.BatchFilter(concentrations.shape[1:], (6, 6))
+bf = batch_filter.GaussBatchGen(concentrations.shape[1:], 16, 100)
 
 def Iteration(c, batch_filtering=False):
     global fp
@@ -273,50 +274,56 @@ def Iteration(c, batch_filtering=False):
     full_loss = hough_loss + reg_loss
     return c, mu, q, full_loss, reg_grad, reg_loss
 
-experiment_name = 'exp7'
+experiment_name = 'exp8'
 try:
     os.mkdir(experiment_name)
 except:
     pass
 
 with open(experiment_name + '/readme.txt', 'w') as f:
-    f.writelines('\n'.join(['Эксперимент7: то же что и 6, только побольше мозаичных',
-        'шагов между полными градиентными']))
+    f.writelines('\n'.join(['Эксперимент8: гауссово сглаживание батч генератора']))
 
 
 def showres(res1, res2, iter_num=None, suffix='iteration'):
-    plt.figure(1)
-    plt.subplot(231)
-    plt.imshow(res1[0])
+    if iter_num % 30 == 0 or iter_num is None:
+        f = plt.figure(1)
+        plt.subplot(231)
+        plt.imshow(res1[0], interpolation='none')
 
-    plt.subplot(232)
-    plt.imshow(res1[1])
+        plt.subplot(232)
+        plt.imshow(res1[1], interpolation='none')
 
-    plt.subplot(233)
-    plt.imshow(np.clip(np.around(res1[0] / res1[1], 4), -0.5, 2.0))
+        plt.subplot(233)
+        plt.imshow(np.clip(np.around(res1[0] / res1[1], 4), -0.5, 2.0), interpolation='none')
 
-    plt.subplot(234)
-    plt.imshow(res2[0])
+        plt.subplot(234)
+        plt.imshow(res2[0], interpolation='none')
 
-    plt.subplot(235)
-    plt.imshow(res2[1])
+        plt.subplot(235)
+        plt.imshow(res2[1], interpolation='none')
 
-    plt.subplot(236)
-    plt.imshow(np.around(res2[0] / res2[1], 4))
-    # plt.pause(0.1)
-    # plt.hold(hold)
-    if iter_num is not None:
+        plt.subplot(236)
+        plt.imshow(np.around(res2[0] / res2[1], 4), interpolation='none')
+        # plt.pause(0.1)
+        # plt.hold(hold)
         plt.savefig(experiment_name + '/%s_%02d.png' % (suffix, iter_num))
-    else:
-        plt.show()
+      
+    # elif iter_num is None:
+        if iter_num is None:
+            plt.show()
+        plt.close(f)
 
 
 # итерационная минимизация.
-iters = 900
+iters = 5000
 stat = np.zeros(shape=(iters + 100, 2 + len(concentrations)), dtype=np.float64)
 
 for i in xrange(iters):
-    do_batch_filtering = i % 72 != 0
+    if i % 30 == 0 and i >= 4250:
+        do_batch_filtering = False
+    else:
+        do_batch_filtering = True
+
     c, mu, q, loss, reg_loss, reg_grad = Iteration(c, 
                                         batch_filtering=do_batch_filtering)
     # showres(mu.reshape(2, *proj_shape), i, 'mu')
@@ -330,18 +337,20 @@ for i in xrange(iters):
     print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
           (i, c.min(), c.max(), loss))
 
-for i in xrange(iters, iters + 100):
-    c, mu, q, loss, reg_loss, reg_grad = Iteration(c, batch_filtering=False)
-    # showres(mu.reshape(2, *proj_shape), i, 'mu')
-    showres(c, mu.reshape(2, *proj_shape), i)
-    # print('reg loss is ', reg_loss)
-
-    c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
-    sum_acc = np.linalg.norm(c - gt_concentrations)
-    stat[i, :] = np.array([loss, sum_acc] + [ac for ac in c_acc])
-
-    print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
-          (i, c.min(), c.max(), loss))
+# for i in xrange(iters, 5 * iters):
+#     c, mu, q, loss, reg_loss, reg_grad = Iteration(c, batch_filtering=False)
+#     # showres(mu.reshape(2, *proj_shape), i, 'mu')
+#     showres(c, mu.reshape(2, *proj_shape), i)
+#     # print('reg loss is ', reg_loss)
+# 
+#     c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
+#     sum_acc = np.linalg.norm(c - gt_concentrations)
+#     stat[i, :] = np.array([loss, sum_acc] + [ac for ac in c_acc])
+# 
+#     print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
+#           (i, c.min(), c.max(), loss))
+# 
+# iters = 5 * iters
 
 plt.figure(2)
 
