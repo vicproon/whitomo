@@ -276,13 +276,15 @@ def Iteration(c, batch_filtering=False):
     full_loss = hough_loss + reg_loss
     return c, mu, q, full_loss, reg_grad, reg_loss
 
+exp_root = '../../exp_output'
 experiment_name = 'exp8'
+exp_dir = os.path.join(exp_root, experiment_name)
 try:
-    os.mkdir(experiment_name)
+    os.mkdir(exp_dir)
 except:
     pass
 
-with open(experiment_name + '/readme.txt', 'w') as f:
+with open(exp_dir + '/readme.txt', 'w') as f:
     f.writelines('\n'.join(['Эксперимент8: гауссово сглаживание батч генератора']))
 
 
@@ -308,7 +310,7 @@ def showres(res1, res2, iter_num=None, suffix='iteration'):
         plt.imshow(np.around(res2[0] / res2[1], 4), interpolation='none')
         # plt.pause(0.1)
         # plt.hold(hold)
-        plt.savefig(experiment_name + '/%s_%02d.png' % (suffix, iter_num))
+        plt.savefig(exp_dir + '/%s_%02d.png' % (suffix, iter_num))
       
     # elif iter_num is None:
         if iter_num is None:

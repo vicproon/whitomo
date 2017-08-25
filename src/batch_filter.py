@@ -60,7 +60,7 @@ def test_batch_generator():
     import matplotlib.pyplot as plt
     import os
     try:
-        os.mkdir('test_batch')
+        os.mkdir('../../exp_output/test_batch')
     except:
         pass
     shape = (256, 256)
@@ -70,7 +70,7 @@ def test_batch_generator():
         plt.figure(1)
         plt.imshow(bg.new_mask(), interpolation='none')
         plt.title('batch %02d' % i)
-        plt.savefig('test_batch/batch_%02d.png' % i)
+        plt.savefig('../../exp_output/test_batch/batch_%02d.png' % i)
 
 
 class GaussBatchGen:
