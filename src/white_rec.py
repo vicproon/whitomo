@@ -3,55 +3,48 @@
 
 # todo спектр из двух линий и два элемента
 # todo модуль штрафа произведения (+)
-# todo рандомные углы при проекции
-# todo рандомные пиксели изображения для регуляризации произведением
+# todo рандомные углы при проекции 
+# todo рандомные пиксели изображения для регуляризации произведением 
+# todo все буфферы вынести в класс
 from __future__ import print_function
 
 import numpy as np
-import xraylib_np as xraylib
 
 import os
 import os.path
 
 import matplotlib.pyplot as plt
 import astra
+
 import scipy.stats
 import sys
 
 # local imports
 import batch_filter
-
-xraylib.XRayInit()
+import phantoms
+from astra_proxy import *
 
 input_dir = '../testdata/whitereconstruct/input'
 energy_grid = np.loadtxt(os.path.join(input_dir, 'grid.txt'))
 source = np.loadtxt(os.path.join(input_dir, 'source.txt'))
 
+# get input data and load proxy objects
+input_data_dict = phantoms.get_input('eggs')
 
-pixel_size = 3e-5  # 0.05 in icmv experiments
-ph_size = (256, 256)
-n_angles = 180
-element_numbers = np.array([22, 28])
+energy_grid = input_data_dict['grid']
+gt_concentrations = input_data_dict['gt_concentrations']
+source = input_data_dict['source']
+pixel_size = input_data_dict['pixel_size']
+element_numbers = input_data_dict['element_numbers']
+element_absorptions = input_data_dict['element_absorptions']
+ph_size = gt_concentrations.shape[1:]
 
-gt_dir = '../testdata/whitereconstruct/correct'
-gt_concentrations = [np.loadtxt(os.path.join(gt_dir, f))
-                     for f in os.listdir(gt_dir)]
-f = [np.loadtxt(os.path.join(input_dir, 'f_%02d.txt' % en))
-     for en in element_numbers]
+# parameters of reconstruction
+n_angles = 180   # projection angles
+alpha = 0.05     # gradient step (aka relaxation aka learning rate)
+beta_reg = 0.1   # regularization coefficiten [update = alpha * (BP + beta * reg)]
 
-
-def absorption(energy, element):
-    element = np.array(element)
-    dens = xraylib.ElementDensity(element)
-    cross = xraylib.CS_Total(element, energy)
-    return dens.reshape(-1, 1) * cross
-
-
-element_absorptions = absorption(energy_grid[:, 0], element_numbers)
-
-sinogram = np.loadtxt(os.path.join(input_dir, 'white_ht.txt'))
-
-
+# setup astra geometry
 proj_geom = astra.create_proj_geom(
     'parallel',
     1.0,
@@ -63,107 +56,11 @@ vol_geom = astra.create_vol_geom(*ph_size)
 projector = astra.create_projector('linear', proj_geom, vol_geom)
 proj_shape = (n_angles, proj_geom['DetectorCount'])
 
-
-class AstraProxy:
-    def __init__(self, dims):
-        if dims == 2:
-            self.data_create = astra.data2d.create
-            self.data_delete = astra.data2d.delete
-            self.data_get = astra.data2d.get
-            self.fp_algo_name = 'FP'
-            self.bp_algo_name = 'BP'
-            self.sirt_algo_name = 'SIRT'
-            self.fbp_algo_name = 'FBP'
-            self.dart_mask_name = 'DARTMASK'
-            self.dart_smoothing_name = 'DARTSMOOTHING'
-        elif dims == 3:
-            self.data_create = astra.data3d.create
-            self.data_delete = astra.data3d.delete
-            self.data_get = astra.data3d.get
-            self.fp_algo_name = 'FP3D'
-            self.bp_algo_name = 'BP3D'
-            self.sirt_algo_name = 'SIRT3D'
-            self.fbp_algo_name = 'FBP3D'
-            self.dart_mask_name = 'DARTMASK3D'
-            self.dart_smoothing_name = 'DARTSMOOTHING3D'
-        else:
-            raise NotImplementedError
-
-
-def gpu_fp(pg, vg, v, proj_id):
-    ap = AstraProxy(len(v.shape))
-    v_id = ap.data_create('-vol', vg, v)
-    rt_id = ap.data_create('-sino', pg)
-    fp_cfg = astra.astra_dict(ap.fp_algo_name)
-    fp_cfg['VolumeDataId'] = v_id
-    fp_cfg['ProjectionDataId'] = rt_id
-    fp_cfg['ProjectorId'] = proj_id
-    fp_id = astra.algorithm.create(fp_cfg)
-    astra.algorithm.run(fp_id)
-    out = ap.data_get(rt_id)
-    astra.algorithm.delete(fp_id)
-    ap.data_delete(rt_id)
-    ap.data_delete(v_id)
-    return out
-
-
-def gpu_bp(pg, vg, rt, proj_id, supersampling=1):
-    ap = AstraProxy(len(rt.shape))
-    v_id = ap.data_create('-vol', vg)
-    rt_id = ap.data_create('-sino', pg, rt)
-    bp_cfg = astra.astra_dict(ap.bp_algo_name)
-    bp_cfg['ReconstructionDataId'] = v_id
-    bp_cfg['ProjectionDataId'] = rt_id
-    bp_cfg['ProjectorId'] = proj_id
-    bp_id = astra.algorithm.create(bp_cfg)
-    astra.algorithm.run(bp_id)
-    out = ap.data_get(v_id)
-    astra.algorithm.delete(bp_id)
-    ap.data_delete(rt_id)
-    ap.data_delete(v_id)
-    return out
-
-
-def cpu_sirt(pg, vg, proj_id, sm, n_iters=100):
-    ap = AstraProxy(len(sm.shape))
-    rt_id = ap.data_create('-sino', pg, data=sm)
-    v_id = ap.data_create('-vol', vg)
-    sirt_cfg = astra.astra_dict(ap.sirt_algo_name)
-    sirt_cfg['ReconstructionDataId'] = v_id
-    sirt_cfg['ProjectionDataId'] = rt_id
-    sirt_cfg['ProjectorId'] = proj_id
-    sirt_id = astra.algorithm.create(sirt_cfg)
-    astra.algorithm.run(sirt_id, n_iters)
-    out = ap.data_get(v_id)
-
-    astra.algorithm.delete(sirt_id)
-    ap.data_delete(rt_id)
-    ap.data_delete(v_id)
-    return out
-
-
-def cpu_fbp(pg, vg, proj_id, sm, n_iters=100):
-    ap = AstraProxy(len(sm.shape))
-    rt_id = ap.data_create('-sino', pg, data=sm)
-    v_id = ap.data_create('-vol', vg)
-    fbp_cfg = astra.astra_dict(ap.fbp_algo_name)
-    fbp_cfg['ReconstructionDataId'] = v_id
-    fbp_cfg['ProjectionDataId'] = rt_id
-    fbp_cfg['ProjectorId'] = proj_id
-    fbp_id = astra.algorithm.create(fbp_cfg)
-    astra.algorithm.run(fbp_id, n_iters)
-    out = ap.data_get(v_id)
-
-    astra.algorithm.delete(fbp_id)
-    ap.data_delete(rt_id)
-    ap.data_delete(v_id)
-    return out
-# ---------------
-
+# setup placeholders for results
 
 conc_shape = (len(element_numbers), ph_size[0], ph_size[1])
-concentrations = np.zeros(shape=conc_shape, dtype=np.float64)
-
+# concentrations = np.zeros(shape=conc_shape, dtype=np.float64)
+# init as truncated normal
 concentrations = scipy.stats.truncnorm(
     a=-0.1, b=0.1, scale=0.1).rvs(size=conc_shape) + 0.09
 
@@ -180,6 +77,8 @@ source /= sum_energy
 
 
 def FP_white(energy, source, pixel_size, concentrations):
+    """ white forward projection
+    """
     global proj_geom
     global vol_geom
     global projector
@@ -201,13 +100,14 @@ def FP_white(energy, source, pixel_size, concentrations):
     Integral = integrate(source.reshape(1, -1) * exp, energy)
     return Integral, exp_arg, exp, flat_fp
 
-
+# calculate sinogram - input for reconstruction
 sinogram, exp_arg, exp, flat_fp, = FP_white(
     energy_grid, source, pixel_size, gt_concentrations)
 
 
 def calc_mu(energy, source, exp, element_absorptions):
-
+    """ wighted residuals
+    """
     mu = np.array([-integrate(
         source.reshape(1, -1) * pixel_size * exp * ea.reshape(1, -1),
         energy)
@@ -216,14 +116,14 @@ def calc_mu(energy, source, exp, element_absorptions):
     return mu
 
 
-alpha = 0.05
-beta_reg = 0.1
 
 
 bp_conc_buffer = np.zeros_like(concentrations)
 
 
 def BP_white(energy, source, exp, concentrations, Q):
+    """white bp step
+    """
     mu = calc_mu(energy, source, exp, element_absorptions)
     global bp_conc_buffer
     conc = bp_conc_buffer
@@ -418,4 +318,4 @@ plt.show()
 # 1) спектр источника сделать с более выреженными пиками
 # 2) фантом взять а-ля квадрат с включениями
 # 3) сделать разбиение на случайные подзоны и апдейт текущего состояния по
-# подзонам.
+# подзонам. (+)
