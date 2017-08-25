@@ -243,6 +243,8 @@ c = np.array(concentrations)
 fp = None
 
 uneq_reg_buffer = np.zeros_like(concentrations)
+
+
 def calc_uneq_reg_grad(c):
     for i, cc in enumerate(uneq_reg_buffer):
         uneq_reg_buffer[i] = c[np.arange(len(c)) != i].sum(axis=0)

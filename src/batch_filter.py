@@ -5,6 +5,7 @@ from __future__ import print_function
 import random
 import numpy as np
 
+
 class BatchFilter(object):
     def __init__(self, shape, batches_shape):
         assert len(shape) == 2, 'BatchFilter can be applied only to 2d images'
@@ -12,7 +13,7 @@ class BatchFilter(object):
         self.shape = shape
         self.batches_shape = batches_shape
         self.num_batches = batches_shape[0] * batches_shape[1]
-        self.batch_shape = tuple(int(s / bs) + 1 for s, bs in \
+        self.batch_shape = tuple(int(s / bs) + 1 for s, bs in
                                  zip(self.shape, self.batches_shape))
         import datetime
         now = datetime.datetime.now()
@@ -22,17 +23,18 @@ class BatchFilter(object):
 
     def __gen_new_batches(self):
         # план действий такой. берем batches_shape и генерим пермутацию из
-        # индексов от 1 до batches_shape[0] * batches_shape[1]. по индексам 
+        # индексов от 1 до batches_shape[0] * batches_shape[1]. по индексам
         # позже генерим соответствующие маски.
         self.batch_order = np.random.permutation(self.num_batches)
         self.batch_index = 0
 
     def __get_batch(self, arr, ibatch):
         batch_indices = np.unravel_index(ibatch, self.batches_shape)
-        ind_start = tuple(i * b for i, b in zip(batch_indices, self.batch_shape))
-        ind_end = tuple(np.clip(i * b + b, 0, s) \
-            for i, b, s in zip(batch_indices, self.batch_shape, self.shape))
-        return arr[ind_start[0] : ind_end[0], ind_start[1] : ind_end[1]]
+        ind_start = tuple(
+            i * b for i, b in zip(batch_indices, self.batch_shape))
+        ind_end = tuple(np.clip(i * b + b, 0, s)
+                        for i, b, s in zip(batch_indices, self.batch_shape, self.shape))
+        return arr[ind_start[0]: ind_end[0], ind_start[1]: ind_end[1]]
 
     def new_mask(self):
         '''Основная фунция. Генерирует булевскую маску для очередного шага,
@@ -52,6 +54,7 @@ class BatchFilter(object):
 
 #    def apply_update(grad):
 #        ''''''
+
 
 def test_batch_generator():
     import matplotlib.pyplot as plt
