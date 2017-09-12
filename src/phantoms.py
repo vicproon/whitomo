@@ -110,11 +110,11 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_delta_spectrum': get_button_delta_spectrum,
               'button_1': get_button_1,
               'button_1_delta_spectrum': get_button_1_delta_spectrum,
-              'button_1': get_button_2,
-              'button_1_delta_spectrum': get_button_2_delta_spectrum,
-              'button_1': get_button_3,
-              'button_1_delta_spectrum': get_button_3_delta_spectrum}
-              
+              'button_2': get_button_2,
+              'button_2_delta_spectrum': get_button_2_delta_spectrum,
+              'button_3': get_button_3,
+              'button_3_delta_spectrum': get_button_3_delta_spectrum}
+
 
 def get_input(ph_name='eggs'):
     """main proxy function, retruns input dict by the name.\

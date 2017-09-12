@@ -25,7 +25,7 @@ import phantoms
 from astra_proxy import *
 
 # get input data and load proxy objects
-input_data_dict = phantoms.get_input('button_delta_spectrum')
+input_data_dict = phantoms.get_input('button_1')
 
 energy_grid = input_data_dict['grid']
 gt_concentrations = input_data_dict['gt_concentrations']
@@ -42,7 +42,7 @@ beta_reg = 0.1   # regularization coefficiten [update = alpha * (BP + beta * reg
 
 # output params
 exp_root = '../../exp_output'
-experiment_name = 'exp19_button'
+experiment_name = 'exp20'
 exp_dir = os.path.join(exp_root, experiment_name)
 try:
     os.mkdir(exp_dir)
@@ -50,8 +50,9 @@ except:
     pass
 
 with open(exp_dir + '/readme.txt', 'w') as f:
-    f.writelines('\n'.join(['''Эксперимент19: фантом-пуговица, 
-        спектр с двумя пиками''', 'без батч-фльтров','']))
+    f.writelines('\n'.join(['''Эксперимент20: здесь и далее меняем
+                         фантомы, не меняя ничего больше''', 
+                         'button_1', 'без батч-фльтров','']))
 
 
 # setup astra geometry
