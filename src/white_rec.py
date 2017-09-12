@@ -24,12 +24,8 @@ import batch_filter
 import phantoms
 from astra_proxy import *
 
-input_dir = '../testdata/whitereconstruct/input'
-energy_grid = np.loadtxt(os.path.join(input_dir, 'grid.txt'))
-source = np.loadtxt(os.path.join(input_dir, 'source.txt'))
-
 # get input data and load proxy objects
-input_data_dict = phantoms.get_input('eggs')
+input_data_dict = phantoms.get_input('button_delta_spectrum')
 
 energy_grid = input_data_dict['grid']
 gt_concentrations = input_data_dict['gt_concentrations']
@@ -40,9 +36,23 @@ element_absorptions = input_data_dict['element_absorptions']
 ph_size = gt_concentrations.shape[1:]
 
 # parameters of reconstruction
-n_angles = 180   # projection angles
+n_angles = 360   # projection angles
 alpha = 0.05     # gradient step (aka relaxation aka learning rate)
 beta_reg = 0.1   # regularization coefficiten [update = alpha * (BP + beta * reg)]
+
+# output params
+exp_root = '../../exp_output'
+experiment_name = 'exp19_button'
+exp_dir = os.path.join(exp_root, experiment_name)
+try:
+    os.mkdir(exp_dir)
+except:
+    pass
+
+with open(exp_dir + '/readme.txt', 'w') as f:
+    f.writelines('\n'.join(['''Эксперимент19: фантом-пуговица, 
+        спектр с двумя пиками''', 'без батч-фльтров','']))
+
 
 # setup astra geometry
 proj_geom = astra.create_proj_geom(
@@ -62,7 +72,10 @@ conc_shape = (len(element_numbers), ph_size[0], ph_size[1])
 # concentrations = np.zeros(shape=conc_shape, dtype=np.float64)
 # init as truncated normal
 concentrations = scipy.stats.truncnorm(
-    a=-0.1, b=0.1, scale=0.1).rvs(size=conc_shape) + 0.09
+    a=-0.1, b=0.1, scale=0.1).rvs(size=conc_shape) 
+# concentrations += np.array(gt_concentrations)
+concentrations += 0.1
+
 
 
 def integrate(ar, energy_grid):
@@ -176,17 +189,6 @@ def Iteration(c, batch_filtering=False):
     full_loss = hough_loss + reg_loss
     return c, mu, q, full_loss, reg_grad, reg_loss
 
-exp_root = '../../exp_output'
-experiment_name = 'exp8'
-exp_dir = os.path.join(exp_root, experiment_name)
-try:
-    os.mkdir(exp_dir)
-except:
-    pass
-
-with open(exp_dir + '/readme.txt', 'w') as f:
-    f.writelines('\n'.join(['Эксперимент8: гауссово сглаживание батч генератора']))
-
 
 def showres(res1, res2, iter_num=None, suffix='iteration'):
     if iter_num % 30 == 0 or iter_num is None:
@@ -219,14 +221,14 @@ def showres(res1, res2, iter_num=None, suffix='iteration'):
 
 
 # итерационная минимизация.
-iters = 5000
-stat = np.zeros(shape=(iters + 100, 2 + len(concentrations)), dtype=np.float64)
-
+iters = 1000
+stat = np.zeros(shape=(iters, 2 + len(concentrations)), dtype=np.float64)
+do_batch_filtering = False
 for i in xrange(iters):
-    if i % 30 == 0 and i >= 4250:
-        do_batch_filtering = False
-    else:
-        do_batch_filtering = True
+    #if i % 30 == 0 and i >= 750:
+    #    do_batch_filtering = False
+    #else:
+    #    do_batch_filtering = True
 
     c, mu, q, loss, reg_loss, reg_grad = Iteration(c, 
                                         batch_filtering=do_batch_filtering)
@@ -278,10 +280,10 @@ plt.plot(stat[:, 3])
 plt.xlabel('Iterations')
 plt.title('c2 accuracy')
 
-plt.savefig(experiment_name + '/error_plots.png')
+plt.savefig(exp_dir  + '/error_plots.png')
 plt.show()
 
-sys.exit(0)
+# sys.exit(0)
 
 # regular SIRT and FBP reconstruction
 i0 = np.dot(source, energy_grid[:, 1])
@@ -307,7 +309,7 @@ plt.subplot(2, 2, 4)
 plt.imshow(fbp_res)
 plt.title('FBP')
 
-plt.savefig('mono_recon.png')
+plt.savefig(os.path.join(exp_dir, 'mono_recon.png'))
 plt.show()
 
 # todo проверить размерности и переходы нормировочных коэффициентов
