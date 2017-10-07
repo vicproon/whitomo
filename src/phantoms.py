@@ -13,6 +13,23 @@ import xraylib_np as xraylib
 
 xraylib.XRayInit()
 
+import scipy.constants
+
+def __angs_kev_coeff():
+    c = scipy.constants.c
+    hh = scipy.constants.physical_constants['Planck constant over 2 pi in eV s'][0]
+    pi = scipy.constants.pi
+    return 1e-3 * 2 * pi * hh * c * 1e10
+
+
+an_kev = __angs_kev_coeff()
+
+
+def angstrom_to_kev(wavelength_angstrom):
+    return an_kev / wavelength_angstrom
+
+def kev_to_angstrom(energy_kev):
+    return an_kev / energy_kev
 
 def absorption(energy, element):
     """Returns total element absorption for given energy.

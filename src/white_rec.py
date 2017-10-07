@@ -42,7 +42,7 @@ beta_reg = 0.1   # regularization coefficiten [update = alpha * (BP + beta * reg
 
 # output params
 exp_root = '../../exp_output'
-experiment_name = 'exp20'
+experiment_name = 'exp21'
 exp_dir = os.path.join(exp_root, experiment_name)
 try:
     os.mkdir(exp_dir)
