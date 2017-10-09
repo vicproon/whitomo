@@ -25,7 +25,7 @@ import phantoms
 from astra_proxy import *
 
 # get input data and load proxy objects
-input_data_dict = phantoms.get_input('button_1')
+input_data_dict = phantoms.get_input('button_2_biology')
 
 energy_grid = input_data_dict['grid']
 gt_concentrations = input_data_dict['gt_concentrations']
@@ -37,12 +37,12 @@ ph_size = gt_concentrations.shape[1:]
 
 # parameters of reconstruction
 n_angles = 360   # projection angles
-alpha = 0.05     # gradient step (aka relaxation aka learning rate)
-beta_reg = 0.1   # regularization coefficiten [update = alpha * (BP + beta * reg)]
+alpha = 100.0    # gradient step (aka relaxation aka learning rate)
+beta_reg = 1e-6   # regularization coefficiten [update = alpha * (BP + beta * reg)]
 
 # output params
 exp_root = '../../exp_output'
-experiment_name = 'exp21'
+experiment_name = 'exp25_bio'
 exp_dir = os.path.join(exp_root, experiment_name)
 try:
     os.mkdir(exp_dir)
@@ -50,9 +50,13 @@ except:
     pass
 
 with open(exp_dir + '/readme.txt', 'w') as f:
-    f.writelines('\n'.join(['''Эксперимент20: здесь и далее меняем
-                         фантомы, не меняя ничего больше''', 
-                         'button_1', 'без батч-фльтров','']))
+    notes = ['''Эксперимент25: биологический спектр''', 
+              'фантом: button_2_biology',
+              'без батч-фльтров',
+              'n_angles: %d' % n_angles,
+              'alpha: %.3f' % alpha,
+              'beta_reg: %.3f' % beta_reg]
+    f.writelines('\n'.join(notes + ['']))
 
 
 # setup astra geometry
@@ -219,7 +223,6 @@ def showres(res1, res2, iter_num=None, suffix='iteration'):
         if iter_num is None:
             plt.show()
         plt.close(f)
-
 
 # итерационная минимизация.
 iters = 1000

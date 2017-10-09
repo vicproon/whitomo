@@ -121,6 +121,36 @@ def get_button_3_delta_spectrum():
     return get_phantom_with_delta_spectrum(get_button_3())
 
 
+def calc_biology_grid():
+    anchors_angstrom = np.array([22,40])
+    anchors_kev = angstrom_to_kev(anchors_angstrom)
+    inner_grid_kev = np.linspace(anchors_kev[1], anchors_kev[0], 10)
+    grid_step = inner_grid_kev[1] - inner_grid_kev[0]
+    grid_pts = np.arange(anchors_kev[1] - 3 * grid_step, 
+        anchors_kev[0] + 4 * grid_step, grid_step)
+    grid = np.array([grid_pts, np.repeat(grid_step, len(grid_pts))])
+    return grid.T
+
+def get_button_2_biology():
+    ph_base = get_button_2()
+    grid = calc_biology_grid()
+    ph_base['grid'] = grid
+
+    biology_source = np.zeros_like(grid[:, 0])
+    biology_source[3] = 0.5
+    biology_source[-5] = 1.0
+    ph_base['source'] = biology_source
+
+    element_numbers = np.array([8, 6])
+    biology_absorptions = absorption(grid[:, 0], element_numbers)
+    ph_base['element_absorptions'] = biology_absorptions
+    ph_base['element_numbers'] = element_numbers
+
+    ph_base['pixel_size'] = 1e-9
+    return ph_base
+
+
+
 __proxy_dict={'eggs': get_eggs_data,
               'eggs_delta_spectrum': get_eggs_with_delta_spectrum,
               'button': get_button,
@@ -130,7 +160,8 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_2': get_button_2,
               'button_2_delta_spectrum': get_button_2_delta_spectrum,
               'button_3': get_button_3,
-              'button_3_delta_spectrum': get_button_3_delta_spectrum}
+              'button_3_delta_spectrum': get_button_3_delta_spectrum,
+              'button_2_biology': get_button_2_biology}
 
 
 def get_input(ph_name='eggs'):
