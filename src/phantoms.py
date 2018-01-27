@@ -121,10 +121,10 @@ def get_button_3_delta_spectrum():
     return get_phantom_with_delta_spectrum(get_button_3())
 
 
-def calc_biology_grid():
-    anchors_angstrom = np.array([22,40])
+def calc_biology_grid(ang_from=22, ang_to=40, num_pts=10):
+    anchors_angstrom = np.array([ang_from,ang_to])
     anchors_kev = angstrom_to_kev(anchors_angstrom)
-    inner_grid_kev = np.linspace(anchors_kev[1], anchors_kev[0], 10)
+    inner_grid_kev = np.linspace(anchors_kev[1], anchors_kev[0], num_pts)
     grid_step = inner_grid_kev[1] - inner_grid_kev[0]
     grid_pts = np.arange(anchors_kev[1] - 3 * grid_step, 
         anchors_kev[0] + 4 * grid_step, grid_step)
@@ -150,6 +150,30 @@ def get_button_2_biology():
     return ph_base
 
 
+def get_synth_data_small():
+    # Grid with respect to only 2.5 and 10
+    grid = np.array([[2.5, 10],
+                     [0.005, 0.005]]).T
+
+    # Source with peaks at 2.5 and 10
+    source = np.array([2.0, 1.0])
+
+    # Taken from synth_spec.py
+    abs_1 = np.array([4000, 302.04159662])
+    abs_2 = np.array([1470.60170339, 2000])
+
+    # Emphasize that elements are imaginary.
+    element_numbers = np.array([301, 302]) 
+
+
+    return {'grid': grid, 
+            'source': source,
+            'pixel_size': 1e-6, # adjust for numerical stability
+            'element_numbers': element_numbers,
+            'gt_concentrations': get_button_3()['gt_concentrations'],
+            'element_absorptions': np.stack([abs_1, abs_2])}
+
+    
 
 __proxy_dict={'eggs': get_eggs_data,
               'eggs_delta_spectrum': get_eggs_with_delta_spectrum,
@@ -161,7 +185,8 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_2_delta_spectrum': get_button_2_delta_spectrum,
               'button_3': get_button_3,
               'button_3_delta_spectrum': get_button_3_delta_spectrum,
-              'button_2_biology': get_button_2_biology}
+              'button_2_biology': get_button_2_biology,
+              'button_3_synth': get_synth_data_small}
 
 
 def get_input(ph_name='eggs'):
