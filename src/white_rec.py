@@ -23,7 +23,7 @@ import phantoms
 from astra_proxy import *
 
 # get input data and load proxy objects
-input_data_dict = phantoms.get_input('button_2_biology')
+input_data_dict = phantoms.get_input('button_3_synth')
 
 energy_grid = input_data_dict['grid']
 gt_concentrations = input_data_dict['gt_concentrations']
@@ -35,12 +35,12 @@ ph_size = gt_concentrations.shape[1:]
 
 # parameters of reconstruction
 n_angles = 360   # projection angles
-alpha = 100.0    # gradient step (aka relaxation aka learning rate)
-beta_reg = 1e-6   # regularization coefficiten [update = alpha * (BP + beta * reg)]
+alpha = 1.0    # gradient step (aka relaxation aka learning rate)
+beta_reg = 1e-2   # regularization coefficiten [update = alpha * (BP + beta * reg)]
 
 # output params
 exp_root = '../../exp_output'
-experiment_name = 'exp25_bio'
+experiment_name = 'exp30'
 exp_dir = os.path.join(exp_root, experiment_name)
 try:
     os.mkdir(exp_dir)
@@ -48,12 +48,23 @@ except:
     pass
 
 with open(exp_dir + '/readme.txt', 'w') as f:
-    notes = ['''Эксперимент25: биологический спектр''', 
-              'фантом: button_2_biology',
+    notes = ['''Эксперимент30: синтетические данные''', 
+              'фантом: button_3_synth',
               'без батч-фльтров',
               'n_angles: %d' % n_angles,
               'alpha: %.3f' % alpha,
-              'beta_reg: %.3f' % beta_reg]
+              'beta_reg: %.3f' % beta_reg,
+              '',
+              '''нумерую эксперимент с "круглой" даты, чтобы обозначить возобновление
+               серии экспериментов. Первый в списке - обычный запуск восстановления на 
+               новых данных спектров и коэффициентов поглащения. а именно, iss9 репозитория.
+               это спектр и поглощения, нарисованные Мариной в январе на встрече.
+               Они не относятся ни к чему физическому а просто служат proof of concept
+
+               Полные графики спектров рисует скрипт synth_spec.py; Для восстановления 
+               испольнуются только координаты сетки с ненулевыми значениями энергии.
+               Сами кривые поглощения получены путем нормировки и варпинга реальных кривых
+               кислорода и углерода''']
     f.writelines('\n'.join(notes + ['']))
 
 
@@ -169,7 +180,7 @@ def calc_uneq_reg_grad(c):
 #bf = batch_filter.BatchFilter(concentrations.shape[1:], (6, 6))
 bf = batch_filter.GaussBatchGen(concentrations.shape[1:], 16, 100)
 
-def Iteration(c, batch_filtering=False):
+def Iteration(c, batch_filtering=False):    
     global fp
     fp, exp_arg, exp, flat_fp = FP_white(energy_grid, source, pixel_size, c)
     q = (sinogram - fp)

@@ -153,7 +153,7 @@ def get_button_2_biology():
 def get_synth_data_small():
     # Grid with respect to only 2.5 and 10
     grid = np.array([[2.5, 10],
-                     [0.5, 0.5]]).T
+                     [0.005, 0.005]]).T
 
     # Source with peaks at 2.5 and 10
     source = np.array([2.0, 1.0])
@@ -168,10 +168,10 @@ def get_synth_data_small():
 
     return {'grid': grid, 
             'source': source,
-            'pixel_size': 1e-3, # adjust for numerical stability
+            'pixel_size': 1e-6, # adjust for numerical stability
             'element_numbers': element_numbers,
             'gt_concentrations': get_button_3()['gt_concentrations'],
-            'element_absorptions': [abs_1, abs_2]}
+            'element_absorptions': np.stack([abs_1, abs_2])}
 
     
 
