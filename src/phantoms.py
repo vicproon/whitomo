@@ -150,6 +150,9 @@ def get_button_2_biology():
     return ph_base
 
 
+def get_imaginary_absorptions():
+    spectrum = delta_spectrum()
+    
 
 __proxy_dict={'eggs': get_eggs_data,
               'eggs_delta_spectrum': get_eggs_with_delta_spectrum,
