@@ -150,8 +150,29 @@ def get_button_2_biology():
     return ph_base
 
 
-def get_imaginary_absorptions():
-    spectrum = delta_spectrum()
+def get_synth_data_small():
+    # Grid with respect to only 2.5 and 10
+    grid = np.array([[2.5, 10],
+                     [0.5, 0.5]]).T
+
+    # Source with peaks at 2.5 and 10
+    source = np.array([2.0, 1.0])
+
+    # Taken from synth_spec.py
+    abs_1 = np.array([4000, 302.04159662])
+    abs_2 = np.array([1470.60170339, 2000])
+
+    # Emphasize that elements are imaginary.
+    element_numbers = np.array([301, 302]) 
+
+
+    return {'grid': grid, 
+            'source': source,
+            'pixel_size': 1e-3, # adjust for numerical stability
+            'element_numbers': element_numbers,
+            'gt_concentrations': get_button_3()['gt_concentrations'],
+            'element_absorptions': [abs_1, abs_2]}
+
     
 
 __proxy_dict={'eggs': get_eggs_data,
@@ -164,7 +185,8 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_2_delta_spectrum': get_button_2_delta_spectrum,
               'button_3': get_button_3,
               'button_3_delta_spectrum': get_button_3_delta_spectrum,
-              'button_2_biology': get_button_2_biology}
+              'button_2_biology': get_button_2_biology,
+              'button_3_synth': get_synth_data_small}
 
 
 def get_input(ph_name='eggs'):

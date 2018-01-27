@@ -1,5 +1,6 @@
 '''A script that generates synthetic spectrum for issue9 of
 https://github.com/vicproon/whitomo
+and does a pretty drawing of it.
 '''
 from __future__ import division, absolute_import, print_function
 
@@ -150,15 +151,15 @@ absorb = [absorb[0] / maxvals[0] * 2000, absorb[1] / maxvals[1] * 4000]
 src = np.zeros_like(new_grid[:, 0])
 # plot_spectrums(new_grid, src, [absorb[0], absorb[1]], ['scaled O', 'scaled C'])
 
-new_x = np.unique(np.hstack([np.linspace(1.5, 2.5, 5),
-                             np.linspace(2.5, 3.5, 5),
-                             np.linspace(3.5, 9, 8),
-                             np.linspace(9, 10, 5),
-                             np.linspace(10., 11, 5),
-                             np.linspace(11, 16.5, 8)]))
+# new_x = np.unique(np.hstack([np.linspace(1.5, 2.5, 5),
+#                              np.linspace(2.5, 3.5, 5),
+#                              np.linspace(3.5, 9, 8),
+#                              np.linspace(9, 10, 5),
+#                              np.linspace(10., 11, 5),
+#                              np.linspace(11, 16.5, 8)]))
 
 
-#new_x = np.arange(0.5, 17, step=0.25)
+new_x = np.arange(0.5, 17, step=0.125)
 
 peak_for_2 = np.where(new_x == 2.5)[0][0]
 peak_for_1 = np.where(new_x == 10.0)[0][0]
@@ -176,5 +177,3 @@ new_spec[peak_for[1]] = 2.0
 new_widths = new_x[1:] - new_x[:-1]
 new_grid = np.vstack([new_x, np.array([new_widths[0]] + list(new_widths))]).T
 plot_spectrums(new_grid, new_spec, new_abs)
-
-
