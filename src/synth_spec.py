@@ -116,6 +116,7 @@ def transform_function(f, x, new_x, pivots):
     pivots.append((len(x) - 1, len(new_x) - 1))
     lp = (0, 0)
     nf = np.zeros_like(new_x)
+    nf[0] = f[0]
     for i, rp in enumerate(pivots):
         # Select parts of functions that correspond to current pivot.
         f_ = f[lp[0]: rp[0] + 1]
@@ -131,11 +132,13 @@ def transform_function(f, x, new_x, pivots):
         inter = scipy.interpolate.interp1d(x_, f_, kind='linear')
 
         # Get new values for current pivot.
-        nf_ += inter(nx_)
+        # Starting indexing from one as left border is already set by
+        # initialisation or previous iteration.
+        nf_[1:] += inter(nx_[1:])
 
         #before_after_plot(x_, f_, nx_, nf_)
         # Set next left pivot as prev right pivot.
-        lp = (rp[0] + 1, rp[1] + 1)
+        lp = (rp[0], rp[1])
 
     #before_after_plot(x, f, new_x, nf)
 
