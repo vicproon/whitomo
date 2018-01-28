@@ -40,7 +40,7 @@ beta_reg = 1e-2   # regularization coefficiten [update = alpha * (BP + beta * re
 
 # output params
 exp_root = '../../exp_output'
-experiment_name = 'exp30'
+experiment_name = 'exp33'
 exp_dir = os.path.join(exp_root, experiment_name)
 try:
     os.mkdir(exp_dir)
@@ -48,23 +48,15 @@ except:
     pass
 
 with open(exp_dir + '/readme.txt', 'w') as f:
-    notes = ['''Эксперимент30: синтетические данные''', 
+    notes = ['''Эксперимент33: меняем визуализацию ''', 
               'фантом: button_3_synth',
               'без батч-фльтров',
               'n_angles: %d' % n_angles,
               'alpha: %.3f' % alpha,
               'beta_reg: %.3f' % beta_reg,
               '',
-              '''нумерую эксперимент с "круглой" даты, чтобы обозначить возобновление
-               серии экспериментов. Первый в списке - обычный запуск восстановления на 
-               новых данных спектров и коэффициентов поглащения. а именно, iss9 репозитория.
-               это спектр и поглощения, нарисованные Мариной в январе на встрече.
-               Они не относятся ни к чему физическому а просто служат proof of concept
-
-               Полные графики спектров рисует скрипт synth_spec.py; Для восстановления 
-               испольнуются только координаты сетки с ненулевыми значениями энергии.
-               Сами кривые поглощения получены путем нормировки и варпинга реальных кривых
-               кислорода и углерода''']
+              ''' делаем концентрации + значения градиентов по всем аддитивным членам
+              ''']
     f.writelines('\n'.join(notes + ['']))
 
 
@@ -90,6 +82,17 @@ concentrations = scipy.stats.truncnorm(
 # concentrations += np.array(gt_concentrations)
 concentrations += 0.1
 
+
+# # Check if GT concentrations give loss < 0.35
+# concentrations = gt_concentrations.copy
+
+# Check if starting near GT leads to GT optimum with zero loss
+# concentrations += gt_concentrations
+
+# What if we not only noise concentrations, but mix them a little bit?
+# c = concentrations.copy()
+# concentrations[0] = 0.8 * c[0] + 0.2 * c[1]
+# concentrations[1] = 0.2 * c[0] + 0.8 * c[1]
 
 
 def integrate(ar, energy_grid):
@@ -180,12 +183,14 @@ def calc_uneq_reg_grad(c):
 #bf = batch_filter.BatchFilter(concentrations.shape[1:], (6, 6))
 bf = batch_filter.GaussBatchGen(concentrations.shape[1:], 16, 100)
 
-def Iteration(c, batch_filtering=False):    
+def Iteration(c, batch_filtering=False, clip_concentrations=False):    
     global fp
     fp, exp_arg, exp, flat_fp = FP_white(energy_grid, source, pixel_size, c)
     q = (sinogram - fp)
     bp_grad, mu = BP_white(energy_grid, source, exp, c, q)
+    grads = {'bp_grad': bp_grad}
     reg_grad = calc_uneq_reg_grad(c)
+    grads['reg_grad'] = reg_grad
 
     # gradient update with regularisation
     reg_loss = np.linalg.norm(beta_reg * c[0] * c[1])
@@ -198,10 +203,14 @@ def Iteration(c, batch_filtering=False):
         c = c - step
 
     hough_loss = np.linalg.norm(q)
-
-    np.linalg.norm(beta_reg * reg_grad)
     full_loss = hough_loss + reg_loss
-    return c, mu, q, full_loss, reg_grad, reg_loss
+
+    if (clip_concentrations):
+        c_new = np.clip(c, 0, 1)
+        grads['clip_grad'] = c_new - c
+        c = c_new
+
+    return c, mu, q, full_loss, reg_grad, reg_loss, grads
 
 
 def showres(res1, res2, iter_num=None, suffix='iteration'):
@@ -233,20 +242,83 @@ def showres(res1, res2, iter_num=None, suffix='iteration'):
             plt.show()
         plt.close(f)
 
+def showres2(c, grads, iter_num=None, suffix='iteration'):
+    """ Plots concentrations and gradients of all additive grad pairs
+    """
+    if iter_num is not None and iter_num % 30 != 0:
+        return;
+
+    # Calc multiplot shape
+    n_elements = len(c)
+    n_grads = len(grads)
+    plot_rows = n_grads + 1
+    plot_cols = n_elements
+
+    # Create matplotlib objects
+    fig, axes = plt.subplots(nrows=plot_rows, ncols=plot_cols,
+                             #sharex=True, sharey='row',
+                             figsize=(2 * plot_cols + 0.5, 2 * plot_rows), num=1)
+    
+    # Set correct limits for all axes
+    for ax in axes.ravel():
+        ax.set_xticks(np.linspace(0, c.shape[2], 5))
+        ax.set_yticks(np.linspace(0, c.shape[1], 5))
+
+
+    # Plot images of concentrations
+    for i in range(n_elements):
+        ax = axes[0, i]
+        ax.imshow(c[i], interpolation='none')
+        ax.set_title('Element %d' % i)
+
+        # Use ylabel as row title for multiplot.
+    axes[0, 0].set_ylabel('Concentrations')
+
+    # Plot their BP grads
+    bp_grad = grads['bp_grad'].reshape(c.shape) # do we need to reshape here?
+    for i in range(n_elements):
+        ax = axes[1, i]
+        ax.imshow(bp_grad[i], interpolation='none')
+    axes[1, 0].set_ylabel('bp_grad')
+
+    # Plot other grads.
+    other_grads = [k for k in grads.keys() if k != 'bp_grad']
+    for r, k in enumerate(other_grads):
+        grad = grads[k]
+        
+        for i in range(n_elements):
+            ax = axes[2 + r, i]
+            ax.imshow(grad[i], interpolation='None')
+
+        # Use ylabel as row title for multiplot
+        axes[2 + r, 0].set_ylabel(k)
+
+    if iter_num is not None:
+        fig.savefig(exp_dir + '/%s_%02d.png' % (suffix, iter_num))
+    else:
+        fig.show()
+
+    plt.close(fig)
+
+
+
 # итерационная минимизация.
 iters = 1000
 stat = np.zeros(shape=(iters, 2 + len(concentrations)), dtype=np.float64)
 do_batch_filtering = False
+do_clipping = True # включаем клиппинг
 for i in xrange(iters):
     #if i % 30 == 0 and i >= 750:
     #    do_batch_filtering = False
     #else:
     #    do_batch_filtering = True
 
-    c, mu, q, loss, reg_loss, reg_grad = Iteration(c, 
-                                        batch_filtering=do_batch_filtering)
+    c, mu, q, loss, reg_loss, reg_grad, grads = Iteration(c, 
+                                        batch_filtering=do_batch_filtering,
+                                        clip_concentrations=do_clipping)
     # showres(mu.reshape(2, *proj_shape), i, 'mu')
-    showres(c, mu.reshape(2, *proj_shape), i)
+    # showres(c, mu.reshape(2, *proj_shape), i)
+    showres2(c, grads, i)
     # print('reg loss is ', reg_loss)
 
     c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
