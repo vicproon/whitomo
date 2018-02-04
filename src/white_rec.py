@@ -27,6 +27,9 @@ input_data_dict = phantoms.get_input('button_3_synth')
 
 energy_grid = input_data_dict['grid']
 gt_concentrations = input_data_dict['gt_concentrations']
+tmp = gt_concentrations.copy()
+gt_concentrations[0] = tmp[1]
+gt_concentrations[1] = tmp[0]
 source = input_data_dict['source']
 pixel_size = input_data_dict['pixel_size']
 element_numbers = input_data_dict['element_numbers']
@@ -40,7 +43,7 @@ beta_reg = 1e-2   # regularization coefficiten [update = alpha * (BP + beta * re
 
 # output params
 exp_root = '../../exp_output'
-experiment_name = 'exp33'
+experiment_name = 'exp35b'
 exp_dir = os.path.join(exp_root, experiment_name)
 try:
     os.mkdir(exp_dir)
@@ -48,15 +51,13 @@ except:
     pass
 
 with open(exp_dir + '/readme.txt', 'w') as f:
-    notes = ['''Эксперимент33: меняем визуализацию ''', 
+    notes = ['''Эксперимент35b: включим клиппинг''', 
               'фантом: button_3_synth',
               'без батч-фльтров',
               'n_angles: %d' % n_angles,
               'alpha: %.3f' % alpha,
               'beta_reg: %.3f' % beta_reg,
-              '',
-              ''' делаем концентрации + значения градиентов по всем аддитивным членам
-              ''']
+              '']
     f.writelines('\n'.join(notes + ['']))
 
 
@@ -177,29 +178,55 @@ uneq_reg_buffer = np.zeros_like(concentrations)
 
 def calc_uneq_reg_grad(c):
     for i, cc in enumerate(uneq_reg_buffer):
-        uneq_reg_buffer[i] = c[np.arange(len(c)) != i].sum(axis=0)
+        uneq_reg_buffer[i] = (c[np.arange(len(c)) != i] * np.sign(c[0] * c[1])).sum(axis=0)
     return uneq_reg_buffer
+
+def calc_triv_conc_grad(c):
+    '''||c(c - 1)||^2 '''
+    # 2 * c * (c - 1) * (2 * c - 1) = 2 * (2 * c ** 3 - c ** 2 - 2 * c ** 2 + c) =
+    # 4 * c ** 3 - 3 * c ** 2 + c
+    res = 4 * c.copy()
+    res = c * (res - 3)
+    return c * (res + 1)
 
 #bf = batch_filter.BatchFilter(concentrations.shape[1:], (6, 6))
 bf = batch_filter.GaussBatchGen(concentrations.shape[1:], 16, 100)
 
-def Iteration(c, batch_filtering=False, clip_concentrations=False):    
+def Iteration(c,
+              batch_filtering=False,
+              clip_concentrations=False, 
+              dissimilarity_constraint=False,
+              triv_conc_constraint=False,
+              iter_num=None):    
     global fp
     fp, exp_arg, exp, flat_fp = FP_white(energy_grid, source, pixel_size, c)
     q = (sinogram - fp)
     bp_grad, mu = BP_white(energy_grid, source, exp, c, q)
     grads = {'bp_grad': bp_grad}
-    reg_grad = calc_uneq_reg_grad(c)
-    grads['reg_grad'] = reg_grad
+    reg_grad = 0;
+    reg_loss = 0;
+    if dissimilarity_constraint:
+        reg_grad = calc_uneq_reg_grad(c)
+        grads['reg_grad'] = reg_grad
+        # gradient update with regularisation
+        reg_loss += np.linalg.norm(beta_reg * c[0] * c[1])
 
-    # gradient update with regularisation
-    reg_loss = np.linalg.norm(beta_reg * c[0] * c[1])
-    step = alpha * (bp_grad + beta_reg * reg_grad)
+    tc_grad = 0
+    if triv_conc_constraint:
+        tc_grad = calc_triv_conc_grad(c)
+        grads['triv_conc'] = tc_grad
+
+    step = alpha * (bp_grad + beta_reg * (reg_grad + tc_grad))
     
     if batch_filtering:
         masks = np.array([bf.new_mask(), bf.new_mask()])
         c = c - step * masks # batch_filtering is ON
     else:
+        if iter_num is not None:
+            if iter_num % 4 == 0:
+                step[1] = 0
+            else:
+                step[0] = 0
         c = c - step
 
     hough_loss = np.linalg.norm(q)
@@ -264,11 +291,14 @@ def showres2(c, grads, iter_num=None, suffix='iteration'):
         ax.set_xticks(np.linspace(0, c.shape[2], 5))
         ax.set_yticks(np.linspace(0, c.shape[1], 5))
 
+    # Intensity limits for concentrations
+    v_min = -0.1
+    v_max = 1.1
 
     # Plot images of concentrations
     for i in range(n_elements):
         ax = axes[0, i]
-        ax.imshow(c[i], interpolation='none')
+        ax.imshow(c[i], interpolation='none', vmin=v_min, vmax=v_max)
         ax.set_title('Element %d' % i)
 
         # Use ylabel as row title for multiplot.
@@ -278,7 +308,7 @@ def showres2(c, grads, iter_num=None, suffix='iteration'):
     bp_grad = grads['bp_grad'].reshape(c.shape) # do we need to reshape here?
     for i in range(n_elements):
         ax = axes[1, i]
-        ax.imshow(bp_grad[i], interpolation='none')
+        ax.imshow(bp_grad[i], interpolation='none', vmin=v_min, vmax=v_max)
     axes[1, 0].set_ylabel('bp_grad')
 
     # Plot other grads.
@@ -288,7 +318,7 @@ def showres2(c, grads, iter_num=None, suffix='iteration'):
         
         for i in range(n_elements):
             ax = axes[2 + r, i]
-            ax.imshow(grad[i], interpolation='None')
+            ax.imshow(grad[i], interpolation='None', vmin=v_min, vmax=v_max)
 
         # Use ylabel as row title for multiplot
         axes[2 + r, 0].set_ylabel(k)
@@ -307,7 +337,9 @@ iters = 1000
 stat = np.zeros(shape=(iters, 2 + len(concentrations)), dtype=np.float64)
 do_batch_filtering = False
 do_clipping = True # включаем клиппинг
-for i in xrange(iters):
+do_dissimilarity_constraint = True
+do_triv_conc = True
+for i in range(iters):
     #if i % 30 == 0 and i >= 750:
     #    do_batch_filtering = False
     #else:
@@ -315,7 +347,10 @@ for i in xrange(iters):
 
     c, mu, q, loss, reg_loss, reg_grad, grads = Iteration(c, 
                                         batch_filtering=do_batch_filtering,
-                                        clip_concentrations=do_clipping)
+                                        clip_concentrations=do_clipping,
+                                        dissimilarity_constraint = do_dissimilarity_constraint,
+                                        triv_conc_constraint=do_triv_conc,
+                                        iter_num=i)
     # showres(mu.reshape(2, *proj_shape), i, 'mu')
     # showres(c, mu.reshape(2, *proj_shape), i)
     showres2(c, grads, i)
@@ -328,7 +363,7 @@ for i in xrange(iters):
     print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
           (i, c.min(), c.max(), loss))
 
-# for i in xrange(iters, 5 * iters):
+# for i in range(iters, 5 * iters):
 #     c, mu, q, loss, reg_loss, reg_grad = Iteration(c, batch_filtering=False)
 #     # showres(mu.reshape(2, *proj_shape), i, 'mu')
 #     showres(c, mu.reshape(2, *proj_shape), i)
@@ -343,7 +378,7 @@ for i in xrange(iters):
 # 
 # iters = 5 * iters
 
-plt.figure(2)
+plt.figure()
 
 plt.subplot(221)
 plt.plot(stat[:, 0])
