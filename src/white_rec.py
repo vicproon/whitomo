@@ -23,13 +23,14 @@ import phantoms
 from astra_proxy import *
 
 # get input data and load proxy objects
-input_data_dict = phantoms.get_input('button_2_synth')
+input_data_dict = phantoms.get_input('button_4_synth')
 
 energy_grid = input_data_dict['grid']
 gt_concentrations = input_data_dict['gt_concentrations']
 tmp = gt_concentrations.copy()
 gt_concentrations[0] = tmp[1]
 gt_concentrations[1] = tmp[0]
+# gt_concentrations = tmp
 source = input_data_dict['source']
 pixel_size = input_data_dict['pixel_size']
 element_numbers = input_data_dict['element_numbers']
@@ -43,7 +44,7 @@ beta_reg = 1e-2   # regularization coefficiten [update = alpha * (BP + beta * re
 
 # output params
 exp_root = '../../exp_output'
-experiment_name = 'exp36'
+experiment_name = 'exp38'
 exp_dir = os.path.join(exp_root, experiment_name)
 try:
     os.mkdir(exp_dir)
@@ -51,8 +52,8 @@ except:
     pass
 
 with open(exp_dir + '/readme.txt', 'w') as f:
-    notes = ['''Эксперимент36: переключим на второй фантом''', 
-              'фантом: button_2_synth',
+    notes = ['''Эксперимент38: переместили концентрации местами.''', 
+              'фантом: button_4_synth',
               'без батч-фльтров',
               'n_angles: %d' % n_angles,
               'alpha: %.3f' % alpha,
@@ -333,7 +334,7 @@ def showres2(c, grads, iter_num=None, suffix='iteration'):
 
 
 # итерационная минимизация.
-iters = 720
+iters = 1000
 stat = np.zeros(shape=(iters, 2 + len(concentrations)), dtype=np.float64)
 do_batch_filtering = False
 do_clipping = True # включаем клиппинг
