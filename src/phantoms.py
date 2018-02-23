@@ -108,6 +108,8 @@ def get_button_2():
 def get_button_3():
     return load_phantom('../testdata/whitereconstruct/correct_button3')
 
+def get_button_4():
+    return load_phantom('../testdata/whitereconstruct/correct_button4')
 
 def get_button_1_delta_spectrum():
     return get_phantom_with_delta_spectrum(get_button_1())
@@ -119,6 +121,10 @@ def get_button_2_delta_spectrum():
 
 def get_button_3_delta_spectrum():
     return get_phantom_with_delta_spectrum(get_button_3())
+
+def get_button_4_delta_spectrum():
+    return get_phantom_with_delta_spectrum(get_button_4())
+
 
 
 def calc_biology_grid(ang_from=22, ang_to=40, num_pts=10):
@@ -178,6 +184,11 @@ def get_synth_data_b2_small():
     data['gt_concentrations'] = get_button_2()['gt_concentrations']
     return data
 
+def get_synth_data_b4_small():
+    data = get_synth_data_small()
+    data['gt_concentrations'] = get_button_4()['gt_concentrations']
+    return data
+
 
 __proxy_dict={'eggs': get_eggs_data,
               'eggs_delta_spectrum': get_eggs_with_delta_spectrum,
@@ -187,11 +198,14 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_1_delta_spectrum': get_button_1_delta_spectrum,
               'button_2': get_button_2,
               'button_2_delta_spectrum': get_button_2_delta_spectrum,
+              'button_2_biology': get_button_2_biology,
+              'button_2_synth': get_synth_data_b2_small,
               'button_3': get_button_3,
               'button_3_delta_spectrum': get_button_3_delta_spectrum,
-              'button_2_biology': get_button_2_biology,
               'button_3_synth': get_synth_data_small,
-              'button_2_synth': get_synth_data_b2_small}
+              'button_4': get_button_4,
+              'button_4_delta_spectrum': get_button_4_delta_spectrum,
+              'button_4_synth': get_synth_data_b4_small}
 
 
 def get_input(ph_name='eggs'):
