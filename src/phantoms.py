@@ -166,7 +166,9 @@ def get_synth_data_small():
 
     # Taken from synth_spec.py
     abs_1 = np.array([4000, 302.04159662])
-    abs_2 = np.array([1470.60170339, 2000])
+    # уменьшили абсорпцию второго в максимуме первого
+    # abs_2 = np.array([1470.60170339, 2000])
+    abs_2 = np.array([300, 2000])
 
     # Emphasize that elements are imaginary.
     element_numbers = np.array([301, 302]) 
