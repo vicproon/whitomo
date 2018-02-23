@@ -165,7 +165,6 @@ def get_synth_data_small():
     # Emphasize that elements are imaginary.
     element_numbers = np.array([301, 302]) 
 
-
     return {'grid': grid, 
             'source': source,
             'pixel_size': 1e-6, # adjust for numerical stability
@@ -173,7 +172,12 @@ def get_synth_data_small():
             'gt_concentrations': get_button_3()['gt_concentrations'],
             'element_absorptions': np.stack([abs_1, abs_2])}
 
-    
+
+def get_synth_data_b2_small():
+    data = get_synth_data_small()
+    data['gt_concentrations'] = get_button_2()['gt_concentrations']
+    return data
+
 
 __proxy_dict={'eggs': get_eggs_data,
               'eggs_delta_spectrum': get_eggs_with_delta_spectrum,
@@ -186,7 +190,8 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_3': get_button_3,
               'button_3_delta_spectrum': get_button_3_delta_spectrum,
               'button_2_biology': get_button_2_biology,
-              'button_3_synth': get_synth_data_small}
+              'button_3_synth': get_synth_data_small,
+              'button_2_synth': get_synth_data_b2_small}
 
 
 def get_input(ph_name='eggs'):
