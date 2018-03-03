@@ -27,9 +27,9 @@ input_data_dict = phantoms.get_input('button_4_synth')
 
 energy_grid = input_data_dict['grid']
 gt_concentrations = input_data_dict['gt_concentrations']
-tmp = gt_concentrations.copy()
-gt_concentrations[0] = tmp[1]
-gt_concentrations[1] = tmp[0]
+# tmp = gt_concentrations.copy()
+# gt_concentrations[0] = tmp[1]
+# gt_concentrations[1] = tmp[0]
 # gt_concentrations = tmp
 source = input_data_dict['source']
 pixel_size = input_data_dict['pixel_size']
@@ -52,7 +52,7 @@ except:
     pass
 
 with open(exp_dir + '/readme.txt', 'w') as f:
-    notes = ['''Эксперимент38: переместили концентрации местами.''', 
+    notes = ['''Эксперимент40: оптимизация с помощью барьерного метода''', 
               'фантом: button_4_synth',
               'без батч-фльтров',
               'n_angles: %d' % n_angles,
@@ -332,140 +332,140 @@ def showres2(c, grads, iter_num=None, suffix='iteration'):
     plt.close(fig)
 
 
+if __name__ == '__main__':
+    # итерационная минимизация.
+    iters = 1000
+    stat = np.zeros(shape=(iters, 2 + len(concentrations)), dtype=np.float64)
+    do_batch_filtering = False
+    do_clipping = True # включаем клиппинг
+    do_dissimilarity_constraint = True
+    do_triv_conc = True
+    for i in range(iters):
+        #if i % 30 == 0 and i >= 750:
+        #    do_batch_filtering = False
+        #else:
+        #    do_batch_filtering = True
 
-# итерационная минимизация.
-iters = 1000
-stat = np.zeros(shape=(iters, 2 + len(concentrations)), dtype=np.float64)
-do_batch_filtering = False
-do_clipping = True # включаем клиппинг
-do_dissimilarity_constraint = True
-do_triv_conc = True
-for i in range(iters):
-    #if i % 30 == 0 and i >= 750:
-    #    do_batch_filtering = False
-    #else:
-    #    do_batch_filtering = True
+        c, mu, q, loss, reg_loss, reg_grad, grads = Iteration(c, 
+                                            batch_filtering=do_batch_filtering,
+                                            clip_concentrations=do_clipping,
+                                            dissimilarity_constraint = do_dissimilarity_constraint,
+                                            triv_conc_constraint=do_triv_conc,
+                                            iter_num=i)
+        # showres(mu.reshape(2, *proj_shape), i, 'mu')
+        # showres(c, mu.reshape(2, *proj_shape), i)
+        showres2(c, grads, i)
+        # print('reg loss is ', reg_loss)
 
-    c, mu, q, loss, reg_loss, reg_grad, grads = Iteration(c, 
-                                        batch_filtering=do_batch_filtering,
-                                        clip_concentrations=do_clipping,
-                                        dissimilarity_constraint = do_dissimilarity_constraint,
-                                        triv_conc_constraint=do_triv_conc,
-                                        iter_num=i)
-    # showres(mu.reshape(2, *proj_shape), i, 'mu')
-    # showres(c, mu.reshape(2, *proj_shape), i)
-    showres2(c, grads, i)
-    # print('reg loss is ', reg_loss)
+        c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
+        sum_acc = np.linalg.norm(c - gt_concentrations)
+        stat[i, :] = np.array([loss, sum_acc] + [ac for ac in c_acc])
 
-    c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
-    sum_acc = np.linalg.norm(c - gt_concentrations)
-    stat[i, :] = np.array([loss, sum_acc] + [ac for ac in c_acc])
+        print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
+              (i, c.min(), c.max(), loss))
 
-    print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
-          (i, c.min(), c.max(), loss))
+    # for i in range(iters, 5 * iters):
+    #     c, mu, q, loss, reg_loss, reg_grad = Iteration(c, batch_filtering=False)
+    #     # showres(mu.reshape(2, *proj_shape), i, 'mu')
+    #     showres(c, mu.reshape(2, *proj_shape), i)
+    #     # print('reg loss is ', reg_loss)
+    # 
+    #     c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
+    #     sum_acc = np.linalg.norm(c - gt_concentrations)
+    #     stat[i, :] = np.array([loss, sum_acc] + [ac for ac in c_acc])
+    # 
+    #     print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
+    #           (i, c.min(), c.max(), loss))
+    # 
+    # iters = 5 * iters
 
-# for i in range(iters, 5 * iters):
-#     c, mu, q, loss, reg_loss, reg_grad = Iteration(c, batch_filtering=False)
-#     # showres(mu.reshape(2, *proj_shape), i, 'mu')
-#     showres(c, mu.reshape(2, *proj_shape), i)
-#     # print('reg loss is ', reg_loss)
-# 
-#     c_acc = np.linalg.norm(c - gt_concentrations, axis=(1, 2))
-#     sum_acc = np.linalg.norm(c - gt_concentrations)
-#     stat[i, :] = np.array([loss, sum_acc] + [ac for ac in c_acc])
-# 
-#     print('iter: %03d, min(c) = %.2f, max(c) = %.2f; loss = %.2f' %
-#           (i, c.min(), c.max(), loss))
-# 
-# iters = 5 * iters
+    plt.figure()
 
-plt.figure()
+    plt.subplot(221)
+    plt.plot(stat[:, 0])
+    plt.xlabel('Iterations')
+    plt.title('loss')
 
-plt.subplot(221)
-plt.plot(stat[:, 0])
-plt.xlabel('Iterations')
-plt.title('loss')
+    plt.subplot(222)
+    plt.plot(stat[:, 1])
+    plt.xlabel('Iterations')
+    plt.title('sum accuracy')
 
-plt.subplot(222)
-plt.plot(stat[:, 1])
-plt.xlabel('Iterations')
-plt.title('sum accuracy')
+    plt.subplot(223)
+    plt.plot(stat[:, 2])
+    plt.xlabel('Iterations')
+    plt.title('c1 accuracy')
 
-plt.subplot(223)
-plt.plot(stat[:, 2])
-plt.xlabel('Iterations')
-plt.title('c1 accuracy')
+    plt.subplot(224)
+    plt.plot(stat[:, 3])
+    plt.xlabel('Iterations')
+    plt.title('c2 accuracy')
 
-plt.subplot(224)
-plt.plot(stat[:, 3])
-plt.xlabel('Iterations')
-plt.title('c2 accuracy')
+    plt.savefig(exp_dir  + '/error_plots.png')
+    plt.show()
 
-plt.savefig(exp_dir  + '/error_plots.png')
-plt.show()
+    for k, cc in enumerate(c):
+        np.savetxt(exp_dir + '/c_%d.txt' % k, cc)
 
-for k, cc in enumerate(c):
-    np.savetxt(exp_dir + '/c_%d.txt' % k, cc)
+    # sys.exit(0)
 
-# sys.exit(0)
+    # regular SIRT and FBP reconstruction
+    i0 = np.dot(source, energy_grid[:, 1])
+    mono_sino = (np.log(i0) - np.log(sinogram)).reshape(proj_shape)
 
-# regular SIRT and FBP reconstruction
-i0 = np.dot(source, energy_grid[:, 1])
-mono_sino = (np.log(i0) - np.log(sinogram)).reshape(proj_shape)
+    sirt_res = cpu_sirt(proj_geom, vol_geom, projector, mono_sino)
+    fbp_res = cpu_fbp(proj_geom, vol_geom, projector, mono_sino)
 
-sirt_res = cpu_sirt(proj_geom, vol_geom, projector, mono_sino)
-fbp_res = cpu_fbp(proj_geom, vol_geom, projector, mono_sino)
+    plt.figure()
+    plt.subplot(2, 2, 1)
+    plt.imshow(mono_sino)
+    plt.title('non_log fp')
 
-plt.figure()
-plt.subplot(2, 2, 1)
-plt.imshow(mono_sino)
-plt.title('non_log fp')
+    plt.subplot(2, 2, 2)
+    plt.imshow(mono_sino)
+    plt.title('log fp mono_sino')
 
-plt.subplot(2, 2, 2)
-plt.imshow(mono_sino)
-plt.title('log fp mono_sino')
+    plt.subplot(2, 2, 3)
+    plt.imshow(sirt_res)
+    plt.title('SIRT 100 iters')
 
-plt.subplot(2, 2, 3)
-plt.imshow(sirt_res)
-plt.title('SIRT 100 iters')
+    plt.subplot(2, 2, 4)
+    plt.imshow(fbp_res)
+    plt.title('FBP')
 
-plt.subplot(2, 2, 4)
-plt.imshow(fbp_res)
-plt.title('FBP')
+    plt.savefig(os.path.join(exp_dir, 'mono_recon.png'))
+    plt.show()
 
-plt.savefig(os.path.join(exp_dir, 'mono_recon.png'))
-plt.show()
-
-np.savetxt(exp_dir + '/sirt.txt', sirt_res)
-np.savetxt(exp_dir + '/fbp.txt', fbp_res)
+    np.savetxt(exp_dir + '/sirt.txt', sirt_res)
+    np.savetxt(exp_dir + '/fbp.txt', fbp_res)
 
 
 
-gt = gt_concentrations
-plt.tight_layout()
-plt.subplot(221)
-plt.imshow(gt[1], vmin=0, vmax=1, interpolation=None)
-plt.xticks(np.linspace(0, 256, 5), [])
-plt.yticks(np.linspace(0, 256, 5), [])
-plt.ylabel("ground\ntruth")
-plt.title("$c_0$")
+    gt = gt_concentrations
+    plt.tight_layout()
+    plt.subplot(221)
+    plt.imshow(gt[1], vmin=0, vmax=1, interpolation=None)
+    plt.xticks(np.linspace(0, 256, 5), [])
+    plt.yticks(np.linspace(0, 256, 5), [])
+    plt.ylabel("ground\ntruth")
+    plt.title("$c_0$")
 
-plt.subplot(222)
-plt.imshow(gt[0], vmin=0, vmax=1, interpolation=None)
-plt.xticks(np.linspace(0, 256, 5), [])
-plt.yticks(np.linspace(0, 256, 5))
-plt.title("$c_1$")
+    plt.subplot(222)
+    plt.imshow(gt[0], vmin=0, vmax=1, interpolation=None)
+    plt.xticks(np.linspace(0, 256, 5), [])
+    plt.yticks(np.linspace(0, 256, 5))
+    plt.title("$c_1$")
 
-plt.subplot(223)
-plt.imshow(c[0], vmin=0, vmax=1, interpolation=None)
-plt.xticks(np.linspace(0, 256, 5))
-plt.yticks(np.linspace(0, 256, 5), [])
-plt.ylabel("recon")
+    plt.subplot(223)
+    plt.imshow(c[0], vmin=0, vmax=1, interpolation=None)
+    plt.xticks(np.linspace(0, 256, 5))
+    plt.yticks(np.linspace(0, 256, 5), [])
+    plt.ylabel("recon")
 
-plt.subplot(224)
-plt.imshow(c[1], vmin=0, vmax=1, interpolation=None)
-plt.xticks(np.linspace(0, 256, 5))
-plt.yticks(np.linspace(0, 256, 5))
+    plt.subplot(224)
+    plt.imshow(c[1], vmin=0, vmax=1, interpolation=None)
+    plt.xticks(np.linspace(0, 256, 5))
+    plt.yticks(np.linspace(0, 256, 5))
 
-plt.savefig(os.path.join(exp_dir, 'recon.png'), dpi=300)
-plt.show()
+    plt.savefig(os.path.join(exp_dir, 'recon.png'), dpi=300)
+    plt.show()
