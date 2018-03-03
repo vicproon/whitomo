@@ -1,7 +1,13 @@
 # /usr/bin/python
 # coding=utf-8
 
+from __future__ import print_function, division
 import numpy as np
+import collections
+
+# a named tuple of x values, function eval at x, and function gradient at x
+# to store optimisation statistics
+StepStat = collections.namedtuple('StepStat', ['x', 'func', 'grad'])
 
 
 class BarrierFunction:
@@ -21,7 +27,7 @@ class BarrierFunction:
         self.num_geval = 0
 
     def eval(self, x, do_grad=True):
-        """evals $f(x)$ and $\nabla f(x)$ at point x.
+        """evals $f(x)$ and $\\nabla f(x)$ at point x.
         :param x point of evaluation
         :param do_grad turn of gradient evaluation
 
@@ -53,5 +59,81 @@ class BarrierFunction:
         return self.eval(x)[1]
 
 
-def barrier_method():
-    pass
+def barrier_method(x0, goal_function, reg_dict, ineq_dict, n_iter=200, t0=1.0, n_biter=10, alpha=0.1):
+    '''performs minimization of goal_function with regularization functions from
+    reg_dict subject to inequality constraints from ineq_dict (in form of g(x) <= 0)
+    using gradient descent with barrier functions.
+    t0 is start of barrier method step. n_biter is number of barrier iterations
+    t = t / 10 each barrier iteration.
+    n_iter is number if gradient descent iterations done for each barrier iteration.
+
+    :param x0 initial FEASIBLE solution
+    :param goal_function tuple of $(f(x), \\nabla f(x))$ function objects
+    :param reg_dict a dict of {'reg_name': (r(x), \\nabla r(x))}. r(x) can be None.
+    :param ineq_dict a dict of {'ineq_name': (g(x), \\nabla g(x)}, tuple is used as an arg for BarrierFunction
+    :param n_iter number of gradient steps for each barreir methor t val
+    :param t0 starting t parameter
+    :param n_biter number of differet t steps in barrier method. 
+    :param aplha gradient step size
+    '''
+    bf_objs={}
+    bf = {}
+
+    for k,v in ineq_dict.iteritems():
+        f = BarrierFunction(v[0], v[1])
+        bf_objs[k] = f
+        bf[k] = (f.func, f.grad)
+
+    # check that initial guess is FEASIBLE:
+    feasible = True
+    for _, v in ineq_dict.iteritems():
+        if v[0](x0) > 0:
+            feasible = False
+            break
+
+    if not feasible:
+        print('ERROR! the initial guess is not feasible.')
+        return None
+
+    t = t0
+    x = x0
+    opt_stats = []
+    for i_biter in range(n_biter):
+
+        print('starting ', i_biter, 'barrier iteration.')
+        for i_iter in range(n_iter):
+            goal_grad = goal_function[1](x)
+            reg_grads = {k:v[1](x) for k,v in reg_dict.iteritems()}
+            bf_grads = {k:v[1](x) for k,v in bf.iteritems()}
+
+            grad = goal_grad
+            for _, g in reg_grads:
+                grad += g
+
+            for _, g in bf_grads:
+                grad += g / t
+
+            step = -alpha * grad
+
+            # collect stats for the step
+            if i_iter % 30 == 0:
+                x_stat = x.copy()
+                goal_stat = StepStat(x_stat, goal_function[0](x), goal_grad.copy())
+                reg_stats = {}
+                for k,v in reg_dict.iteritems():
+                    reg_stats[k] = StepStat(x_stat, v[0](x), reg_grads[k].copy())
+
+                bf_stats = {}
+                for k,v in bf.iteritems():
+                    bf_stats[k] = StepStat(x_stat, v.last_phi.copy(), v.last_grad.copy())
+
+                print('optimisation progress: ', i_biter, 'barrier iteration', 
+                      'step: ', i_iter, 'out of', n_iter)
+
+                opt_stats.append(goal_stat, reg_stats, bf_stats)
+
+            x = x + step
+
+        t = t / 10
+
+    return x, opt_stats
