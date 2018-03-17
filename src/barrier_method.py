@@ -76,7 +76,6 @@ class BarrierFunction(object):
 
         return self.proj(x)
 
-
 def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=1.0, n_biter=10, alpha=0.1,
                    beta_reg = 1.0, t_step = 0.1):
     '''performs minimization of goal_function with regularization functions from
