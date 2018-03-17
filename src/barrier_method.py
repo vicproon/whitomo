@@ -4,6 +4,7 @@
 from __future__ import print_function, division
 import numpy as np
 import collections
+import helpers
 
 # a named tuple of x values, function eval at x, and function gradient at x
 # to store optimisation statistics
@@ -35,6 +36,8 @@ class BarrierFunction:
         """
         fx = self.f(x)
         phi = -np.log(-self.f(x))
+        # for infeasible point replace nans with infs
+        phi[fx >= 0] = np.inf 
         self.last_f = fx
         self.last_phi = phi
         self.num_feval += 1
@@ -59,7 +62,8 @@ class BarrierFunction:
         return self.eval(x)[1]
 
 
-def barrier_method(x0, goal_function, reg_dict, ineq_dict, n_iter=200, t0=1.0, n_biter=10, alpha=0.1):
+def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=1.0, n_biter=10, alpha=0.1,
+                   beta_reg = 1.0, t_step = 0.1):
     '''performs minimization of goal_function with regularization functions from
     reg_dict subject to inequality constraints from ineq_dict (in form of g(x) <= 0)
     using gradient descent with barrier functions.
@@ -75,6 +79,8 @@ def barrier_method(x0, goal_function, reg_dict, ineq_dict, n_iter=200, t0=1.0, n
     :param t0 starting t parameter
     :param n_biter number of differet t steps in barrier method. 
     :param aplha gradient step size
+    :param beta_reg common relaxation parameter for regularization terms (both reg and ineq)
+    :param t_step exponential step of t decay
     '''
     bf_objs={}
     bf = {}
@@ -87,7 +93,7 @@ def barrier_method(x0, goal_function, reg_dict, ineq_dict, n_iter=200, t0=1.0, n
     # check that initial guess is FEASIBLE:
     feasible = True
     for _, v in ineq_dict.iteritems():
-        if v[0](x0) > 0:
+        if np.any(v[0](x0) > 0):
             feasible = False
             break
 
@@ -107,16 +113,20 @@ def barrier_method(x0, goal_function, reg_dict, ineq_dict, n_iter=200, t0=1.0, n
             bf_grads = {k:v[1](x) for k,v in bf.iteritems()}
 
             grad = goal_grad
-            for _, g in reg_grads:
-                grad += g
+            for _, g in reg_grads.iteritems():
+                grad += beta_reg * g
 
-            for _, g in bf_grads:
-                grad += g / t
+            for _, g in bf_grads.iteritems():
+                grad += beta_reg * g * t
 
             step = -alpha * grad
-
             # collect stats for the step
-            if i_iter % 30 == 0:
+
+            helpers.printProgressBar(i_iter, n_iter - 1, 
+                prefix='barrier iter %d/%d' % (i_biter + 1, n_biter),
+                suffix='done (%03d/%03d)' % (i_iter + 1, n_iter), length=50)
+
+            if i_iter % 10 == 0:
                 x_stat = x.copy()
                 goal_stat = StepStat(x_stat, goal_function[0](x), goal_grad.copy())
                 reg_stats = {}
@@ -124,16 +134,17 @@ def barrier_method(x0, goal_function, reg_dict, ineq_dict, n_iter=200, t0=1.0, n
                     reg_stats[k] = StepStat(x_stat, v[0](x), reg_grads[k].copy())
 
                 bf_stats = {}
-                for k,v in bf.iteritems():
+                for k,v in bf_objs.iteritems():
                     bf_stats[k] = StepStat(x_stat, v.last_phi.copy(), v.last_grad.copy())
 
-                print('optimisation progress: ', i_biter, 'barrier iteration', 
-                      'step: ', i_iter, 'out of', n_iter)
+                # print('\noptimisation progress: ', i_biter, 'barrier iteration', 
+                #       'step: ', i_iter, 'out of', n_iter)
 
-                opt_stats.append(goal_stat, reg_stats, bf_stats)
+                opt_stats.append((goal_stat, reg_stats, bf_stats))
 
             x = x + step
 
-        t = t / 10
+        t = t * t_step
+        print('')
 
     return x, opt_stats
