@@ -63,7 +63,8 @@ class BarrierFunction:
 
 
 def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=1.0, n_biter=10, alpha=0.1,
-                   beta_reg = 1.0, t_step = 0.1):
+                   beta_reg = 1.0, t_step = 0.1,
+                   add_stat_cb=None):
     '''performs minimization of goal_function with regularization functions from
     reg_dict subject to inequality constraints from ineq_dict (in form of g(x) <= 0)
     using gradient descent with barrier functions.
@@ -81,6 +82,7 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
     :param aplha gradient step size
     :param beta_reg common relaxation parameter for regularization terms (both reg and ineq)
     :param t_step exponential step of t decay
+    :param add_stat_cb callback on iteration add. takes a 3-tuple of goal, reg and ineq stepstat vals
     '''
     bf_objs={}
     bf = {}
@@ -140,13 +142,16 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
                 # print('\noptimisation progress: ', i_biter, 'barrier iteration', 
                 #       'step: ', i_iter, 'out of', n_iter)
 
-                opt_stats.append((goal_stat, reg_stats, bf_stats))
+#                opt_stats.append((goal_stat, reg_stats, bf_stats))
+                add_stat_cb((goal_stat, reg_stats, bf_stats))
 
             x = x + step
 
         t = t * t_step
         alpha = alpha * t_step
         n_iter = int(n_iter / t_step)
+        if n_iter > 1000:
+            n_iter = 1000
         print('')
 
-    return x, opt_stats
+    return x , opt_stats

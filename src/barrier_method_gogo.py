@@ -12,6 +12,8 @@ import numpy as np
 import os, os.path
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+import collections
+
 
 
 input_data_dict = phantoms.get_input('button_4_synth')
@@ -89,8 +91,56 @@ conc_non_negative = (lambda x: -x, lambda x: -np.ones_like(x))
 conc_less_than_one = (lambda x: x - 1, lambda x: np.ones_like(x))
 
 # ==============
+# Setup stat callback
+
+# Result plotting function
+def plot_x(x, iter, num, show=True, save=False, out='../../exp_results/movie'):
+    fig, axes = plt.subplots(nrows=1, ncols=2)
+    im0 = axes[0].imshow(x[0], vmin=0, vmax=1)
+    axes[0].set_title('$c_0$')
+    im1 = axes[1].imshow(x[1], vmin=0, vmax=1)
+    axes[1].set_title('$c_1$')
+
+    plt.suptitle('Iteration %d' % iter)
+
+    divider = make_axes_locatable(axes[0])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im0, cax=cax)
+
+    divider = make_axes_locatable(axes[1])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im1, cax=cax)
+    plt.tight_layout()
+    if save:
+        try:
+            os.makedirs(out)
+        except os.error:
+            pass
+
+        plt.savefig(os.path.join(out, '%04d.png' % num),
+            dpi=150)
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+opt_stats = collections.deque([], maxlen=5000)
+stat_iter = 0
+
+def stat_cb(statrecord):
+    global opt_stats
+    global stat_iter
+    out = '../../exp_results/movie3'
+    opt_stats.append(statrecord)
+    x = statrecord[0].x
+    plot_x(x, stat_iter * 10, stat_iter, show=False, save=True, out=out)
+    stat_iter += 1
+
+
+# ==============
 # run barrier method with C constraints only
-ans, opt_stats = barrier_method.barrier_method(concentrations,
+ans, opt_stats1 = barrier_method.barrier_method(concentrations,
     goal,
     reg_dict={'ineq_reg': ineq_reg},
     ineq_dict={'conc_non_negative': conc_non_negative,
@@ -100,7 +150,8 @@ ans, opt_stats = barrier_method.barrier_method(concentrations,
     t0=0.1,
     t_step=0.5,
     beta_reg=1.0,
-    alpha=1.0)
+    alpha=1.0,
+    add_stat_cb=stat_cb)
 
 plt.subplot(121)
 plt.imshow(ans[0])
@@ -141,37 +192,6 @@ plt.title('grad norms for barrier functions')
 
 plt.show()
 
-
-def plot_x(x, iter, num, show=True, save=False, out='../../exp_results/movie'):
-    fig, axes = plt.subplots(nrows=1, ncols=2)
-    im0 = axes[0].imshow(x[0], vmin=0, vmax=1)
-    axes[0].set_title('$c_0$')
-    im1 = axes[1].imshow(x[1], vmin=0, vmax=1)
-    axes[1].set_title('$c_1$')
-
-    plt.suptitle('Iteration %d' % iter)
-
-    divider = make_axes_locatable(axes[0])
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    plt.colorbar(im0, cax=cax)
-
-    divider = make_axes_locatable(axes[1])
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    plt.colorbar(im1, cax=cax)
-    plt.tight_layout()
-    if save:
-        try:
-            os.makedirs(out)
-        except os.error:
-            pass
-
-        plt.savefig(os.path.join(out, '%04d.png' % num),
-            dpi=150)
-    if show:
-        plt.show()
-    else:
-        plt.close(fig)  
-
 # plot_x(ans, 1000, 100, True, True)
 
 def save_iteration_movie(opt_stats, out):
@@ -179,4 +199,4 @@ def save_iteration_movie(opt_stats, out):
         x = stat[0].x
         plot_x(x, i * 10, i, show=False, save=True, out=out)
 
-save_iteration_movie(opt_stats, '../../exp_results/movie2')
+# save_iteration_movie(opt_stats, '../../exp_results/movie3')
