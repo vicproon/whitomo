@@ -179,6 +179,8 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
             x = x + step
 
         t = t * t_step
+        alpha = alpha * t_step
+        n_iter = int(n_iter / t_step)
         print('')
 
     return x, opt_stats
