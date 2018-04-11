@@ -98,8 +98,25 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
             break
 
     if not feasible:
-        print('ERROR! the initial guess is not feasible.')
-        return None
+        print('WARNING! the initial guess is not feasible.')
+        
+        print('trying to project in onto fieasible set..')
+        for _, v in ineq_dict.iteritems():
+            if len(v) >=3:
+                x0 = v[2](x0)
+
+        feasible = True
+        infeas_list = []
+        for k, v in ineq_dict.iteritems():
+            if np.any(v[0](x0) > 0):
+                feasible = False
+                infeas_list.append(k)
+
+        if not feasible:
+            print('ERROR! feasibility projection unsuccesfull')
+            print('non-satisfied constraints: ', ' '.join(infeas_list))
+            return x0, None
+
 
     t = t0
     x = x0
