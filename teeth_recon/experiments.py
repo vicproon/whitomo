@@ -1,6 +1,6 @@
 # /usr/bin/python
 # coding=utf-8
-from __future__ import absolute_import
+# from __future__ import absolute_import
 
 import astra
 import numpy as np
@@ -18,7 +18,9 @@ import datetime
 from cvxopt import matrix
 from cvxopt import solvers
 
-from .. import barrier_method
+import sys
+sys.path.append('../src')
+import barrier_method
 
 import logging as log
 log.basicConfig(level=log.INFO)
@@ -548,8 +550,8 @@ def ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
         # plot_mse.append(mse(x, orig.flatten()))
 
     x_cur = np.zeros(v_shape, dtype='float32').flatten()
-    for i in range(10000):
-        x_cur = x_cur - 1e-5 * grad(x_cur, alpha)
+    for i in range(100):
+        x_cur = x_cur - 1e-4 * grad(x_cur, alpha)
         cb(x_cur)
 
     #x_cur = opt.fmin_cg(lambda x: cost(x, alpha),
@@ -575,53 +577,70 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     r, m = ray_transform_from_projection(pr, bound, i0)
     # после этого в r[m] лежит log(i0) - log(bound)
     v_shape = vg_to_shape(vg)
+    print ('v_shape:', v_shape)
+    print('m shape:', m.shape)
     m = m.flatten()
     b = r.flatten()
     bound_log = np.log(i0) - np.log(bound)
     b[m] = bound_log
 
-    # x[m] >= bound <-> bound - x[m] <= 
+    FP = lambda x: gpu_fp(pg, vg, x.reshape(v_shape), proj_id).flatten()
+    BP = lambda x: gpu_bp(pg, vg, x.reshape(r.shape), proj_id).flatten()
+
+    # FP(x)[m] >= bound <-> bound - FP(x)[m] <= 0
     def bc_func(x):
-        return bound_log - x[m]
+        f = FP(x)
+        return bound_log - f[m]
 
     def bc_grad(x):
-        res = np.zeros_like(x)
-        res[m] = -1
-        return res
+        grad = np.zeros_like(r).flatten()
+        grad[m] = -1
+        return BP(grad)
 
-    bound_constraints = (bc_func, bc_grad)
+    def bc_project(x, n_iter=100, alpha=1e-2):
+        '''Projects x onto feasible point set
+        '''
+        f = FP(x)
+        infeas_i = m & (f < bound_log)
+        x_new = x.copy()
+        for i in range(n_iter):
+            infeas_i = m & (f < bound_log)
+            if not np.any(infeas_i):
+                break
+            f[~infeas_i] = 0
+            f[infeas_i] -= bound_log + 1e-3 #..?
+            x_new = x_new - alpha * BP(f)
+            f = FP(x_new)
+        # import ipdb; ipdb.set_trace()
+        return x_new
+
+    # import pdb; pdb.set_trace()
+
+    bound_constraints = (bc_func, bc_grad, bc_project)
 
     # x >= 0 constraints
-    morezero_constraints= (lambda x: -x, lambda x: -np.ones_like(x))
+    def nonzero_project(x):
+        return np.clip(x, 0, x.max())
+
+    morezero_constraints= (lambda x: -x,                     # func
+                           lambda x: -np.ones_like(x),       # grad
+                           lambda x: np.clip(x, 0, x.max())) # project
 
     n_bad = np.sum(m)
     n_good = m.size - n_bad
 
-    FP = lambda x: gpu_fp(pg, vg, x.reshape(v_shape), proj_id).flatten()
-    BP = lambda x: gpu_bp(pg, vg, x.reshape(r.shape), proj_id).flatten()
 
-    def cost(x, a):
+
+    def cost(x):
         d = FP(x) - b
-
-        p_mask = (d > 0)*m
-        d[p_mask] = 0.0
-        d[m] *= a
-
-        d[1-m] /= np.sqrt(n_good)
-        d[m] /= np.sqrt(n_bad)
-
+        d[m] = 0
+        d /= n_good
         return np.sum(d**2)
 
-    def grad(x, a):
+    def grad(x):
         d = FP(x) - b
-
-        p_mask = (d > 0)*m
-        d[p_mask] = 0.0
-        d[m] *= a
-
-        d[1-m] /= n_good
-        d[m] /= n_bad
-
+        d[m] = 0
+        d /= n_good
         return 2.0*BP(d)
 
     plot_cost = []
@@ -634,10 +653,19 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
         # plot_cost.append(cost(x, alpha))
         # plot_mse.append(mse(x, orig.flatten()))
 
-    x_cur = np.zeros(v_shape, dtype='float32').flatten()
-    for i in range(10000):
-        x_cur = x_cur - 1e-5 * grad(x_cur, alpha)
-        cb(x_cur)
+
+    x_cur = 1e-2 + np.zeros(v_shape, dtype='float32').flatten()
+    
+    ans, stats = barrier_method.barrier_method(x_cur,
+        (cost, grad),
+        ineq_dict={'bound': bound_constraints,
+                   'morezero': morezero_constraints},
+        n_iter=100,
+        n_biter=10,
+        t0=0.1,
+        t_step=0.2,
+        beta_reg=1.0)
+
 
     #x_cur = opt.fmin_cg(lambda x: cost(x, alpha),
     #                    x_cur,
@@ -655,7 +683,7 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     # ax = plt.gca().twinx()
     # ax.plot(np.arange(n), plot_mse, '--')
 
-    return x_cur.reshape(v_shape)
+    return ans.reshape(v_shape), stats
 
 
 def run_all_experiments():
@@ -688,7 +716,9 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
     plt.savefig(name)
     return
 
+x3 = None
 def main():
+    global x3
     # e1_prepare_data()
     # run_all_experiments()
     i0 = 1e3
@@ -725,18 +755,23 @@ def main():
     x1[x1 < 0] = 0
     x2[x2 < 0] = 0
 
-    solves = quadratic_programming(pg, vg, v, proj_id, n_angles, r, bound)
-    x3 = np.array(solves['inequalities'])
-    x3 = x3.reshape(x2.shape)
-    x4 = np.array(solves['without_inequalities'])
-    x4 = x4.reshape(x1.shape)
-    x3[x3 < 0] = 0
-    x4[x4 < 0] = 0
+    # solves = quadratic_programming(pg, vg, v, proj_id, n_angles, r, bound)
+    # x3 = np.array(solves['inequalities'])
+    # x3 = x3.reshape(x2.shape)
+    # x4 = np.array(solves['without_inequalities'])
+    # x4 = x4.reshape(x1.shape)
+    # x3[x3 < 0] = 0
+    # x4[x4 < 0] = 0
+
+    x3, run_stats = barrier_least_squares(i0, pg, vg, pr, proj_id, bound, 100, orig=item['original'])
+    x4 = x3
 
     x5 = ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, 300, orig=item['original'])
     x6 = mask_linear_least_squares(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x5[x5 < 0] = 0
     x6[x6 < 0] = 0
+
+
 
     v_max = np.amax([x1.max(), x2.max(), x3.max(), x4.max(), x5.max(), x6.max()])
     print v_max
