@@ -9,6 +9,10 @@ import phantoms
 import scipy, scipy.stats
 import matplotlib.pyplot as plt
 import numpy as np
+import os, os.path
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+import collections
 
 
 input_data_dict = phantoms.get_input('button_4_synth')
@@ -46,7 +50,7 @@ conc_shape = (len(element_numbers), ph_size[0], ph_size[1])
 # concentrations = np.zeros(shape=conc_shape, dtype=np.float64)
 # init as truncated normal
 concentrations = scipy.stats.truncnorm(
-    a=-0.1, b=0.1, scale=0.1).rvs(size=conc_shape) 
+    a=-0.05, b=0.05, scale=0.05).rvs(size=conc_shape) 
 # concentrations += np.array(gt_concentrations)
 concentrations += 0.15
 
@@ -86,17 +90,67 @@ conc_non_negative = (lambda x: -x, lambda x: -np.ones_like(x))
 conc_less_than_one = (lambda x: x - 1, lambda x: np.ones_like(x))
 
 # ==============
+# Setup stat callback
+
+# Result plotting function
+def plot_x(x, iter, num, show=True, save=False, out='../../exp_results/movie'):
+    fig, axes = plt.subplots(nrows=1, ncols=2)
+    im0 = axes[0].imshow(x[0], vmin=0, vmax=1)
+    axes[0].set_title('$c_0$')
+    im1 = axes[1].imshow(x[1], vmin=0, vmax=1)
+    axes[1].set_title('$c_1$')
+
+    plt.suptitle('Iteration %d' % iter)
+
+    divider = make_axes_locatable(axes[0])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im0, cax=cax)
+
+    divider = make_axes_locatable(axes[1])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im1, cax=cax)
+    plt.tight_layout()
+    if save:
+        try:
+            os.makedirs(out)
+        except os.error:
+            pass
+
+        plt.savefig(os.path.join(out, '%04d.png' % num),
+            dpi=150)
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+opt_stats = collections.deque([], maxlen=5000)
+stat_iter = 0
+
+def stat_cb(statrecord):
+    global opt_stats
+    global stat_iter
+    out = '../../exp_results/movie3'
+    opt_stats.append(statrecord)
+    x = statrecord[0].x
+    plot_x(x, stat_iter * 10, stat_iter, show=False, save=True, out=out)
+    stat_iter += 1
+
+
+# ==============
 # run barrier method with C constraints only
-ans, opt_stats = barrier_method.barrier_method(concentrations,
+ans, opt_stats1 = barrier_method.barrier_method(concentrations,
     goal,
     reg_dict={'ineq_reg': ineq_reg},
     ineq_dict={'conc_non_negative': conc_non_negative,
                'conc_less_than_one': conc_less_than_one},
-    n_iter=100,
+    n_iter=50,
     n_biter=10,
     t0=0.1,
-    t_step=0.2,
-    beta_reg=1.0)
+    t_step=0.5,
+    beta_reg=1.0,
+    alpha=1.0,
+    add_stat_cb=stat_cb)
 
 plt.subplot(121)
 plt.imshow(ans[0])
@@ -136,3 +190,12 @@ plt.legend(['$c \geq 0$', '$c \leq 1$'])
 plt.title('grad norms for barrier functions')
 
 plt.show()
+
+# plot_x(ans, 1000, 100, True, True)
+
+def save_iteration_movie(opt_stats, out):
+    for i, stat in enumerate(opt_stats):
+        x = stat[0].x
+        plot_x(x, i * 10, i, show=False, save=True, out=out)
+
+# save_iteration_movie(opt_stats, '../../exp_results/movie3')
