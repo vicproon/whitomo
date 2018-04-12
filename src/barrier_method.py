@@ -11,7 +11,7 @@ import helpers
 StepStat = collections.namedtuple('StepStat', ['x', 'func', 'grad'])
 
 
-class BarrierFunction:
+class BarrierFunction(object):
     """Class represents a barrier penalty to constraint in
     the interrior point method:
     $$
@@ -19,13 +19,14 @@ class BarrierFunction:
     $$
     """
 
-    def __init__(self, func, grad):
+    def __init__(self, func, grad, proj=None):
         """accepts functions for evaluating f(x) and $\nabla f(x)$ at a point.
         """
         self.f = func
         self.g = grad
         self.num_feval = 0
         self.num_geval = 0
+        self.proj = proj
 
     def eval(self, x, do_grad=True):
         """evals $f(x)$ and $\\nabla f(x)$ at point x.
@@ -35,7 +36,7 @@ class BarrierFunction:
         returns tuple of f(x) and its grad
         """
         fx = self.f(x)
-        phi = -np.log(-self.f(x))
+        phi = -np.log(-fx)
         # for infeasible point replace nans with infs
         phi[fx >= 0] = np.inf 
         self.last_f = fx
@@ -45,6 +46,7 @@ class BarrierFunction:
 
         if do_grad:
             gx = self.g(x)
+            n = fx.flatten().shape[0]
             grad_phi = - gx / fx
             self.last_g = gx
             self.last_grad = grad_phi
@@ -60,6 +62,19 @@ class BarrierFunction:
         """shortcut to eval only function gradient
         """
         return self.eval(x)[1]
+
+    def is_feasible(self, x):
+        """ checks if x is a feasible point
+        """
+        return np.all(self.f(x) <= 0)
+
+    def project(self, x):
+        """projects point x to feasible set
+        """
+        if self.proj is None:
+            return x
+
+        return self.proj(x)
 
 
 def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=1.0, n_biter=10, alpha=0.1,
@@ -86,14 +101,18 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
     bf = {}
 
     for k,v in ineq_dict.iteritems():
-        f = BarrierFunction(v[0], v[1])
-        bf_objs[k] = f
-        bf[k] = (f.func, f.grad)
+        if type(v) is tuple:
+            f = BarrierFunction(*v)
+            bf_objs[k] = f
+            bf[k] = (f.func, f.grad)
+        elif issubclass(type(v), BarrierFunction):
+            bf_objs[k] = v
+            bf[k] = (v.func, v.grad)
 
     # check that initial guess is FEASIBLE:
     feasible = True
-    for _, v in ineq_dict.iteritems():
-        if np.any(v[0](x0) > 0):
+    for _, v in bf_objs.iteritems():
+        if not v.is_feasible(x0):
             feasible = False
             break
 
@@ -101,14 +120,13 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
         print('WARNING! the initial guess is not feasible.')
         
         print('trying to project in onto fieasible set..')
-        for _, v in ineq_dict.iteritems():
-            if len(v) >=3:
-                x0 = v[2](x0)
+        for _, v in bf_objs.iteritems():
+            x0 = v.proj(x0)
 
         feasible = True
         infeas_list = []
-        for k, v in ineq_dict.iteritems():
-            if np.any(v[0](x0) > 0):
+        for k, v in bf_objs.iteritems():
+            if not v.is_feasible(x0):
                 feasible = False
                 infeas_list.append(k)
 

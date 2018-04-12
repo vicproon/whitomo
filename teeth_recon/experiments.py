@@ -21,6 +21,7 @@ from cvxopt import solvers
 import sys
 sys.path.append('../src')
 import barrier_method
+from barrier import HoughBarrier
 
 import logging as log
 log.basicConfig(level=log.INFO)
@@ -544,31 +545,31 @@ def ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     def cb(x):
         global counter
         counter += 1
-        print "iteration %d, cost: %.2f" % (counter, cost(x, alpha))
-        return None
-        # plot_cost.append(cost(x, alpha))
-        # plot_mse.append(mse(x, orig.flatten()))
+        #print "iteration %d, cost: %.2f" % (counter, cost(x, alpha))
+        #return None
+        plot_cost.append(cost(x, alpha))
+        plot_mse.append(mse(x, orig.flatten()))
 
     x_cur = np.zeros(v_shape, dtype='float32').flatten()
-    for i in range(100):
-        x_cur = x_cur - 1e-4 * grad(x_cur, alpha)
-        cb(x_cur)
+    # for i in range(100):
+    #     x_cur = x_cur - 1e-4 * grad(x_cur, alpha)
+    #     cb(x_cur)
 
-    #x_cur = opt.fmin_cg(lambda x: cost(x, alpha),
-    #                    x_cur,
-    #                    lambda x: grad(x, alpha),
-    #                    maxiter=2000,
-    #                    callback=cb)
+    x_cur = opt.fmin_cg(lambda x: cost(x, alpha),
+                        x_cur,
+                        lambda x: grad(x, alpha),
+                        maxiter=2000,
+                        callback=cb)
 
-    # print(opt.check_grad(lambda x: cost(x, alpha),
-    #                      lambda x: grad(x, alpha),
-    #                      x_cur))
+    print(opt.check_grad(lambda x: cost(x, alpha),
+                         lambda x: grad(x, alpha),
+                         x_cur))
 
-    # n = len(plot_cost)
-    # plt.figure()
-    # plt.plot(np.arange(n), plot_cost)
-    # ax = plt.gca().twinx()
-    # ax.plot(np.arange(n), plot_mse, '--')
+    n = len(plot_cost)
+    plt.figure()
+    plt.plot(np.arange(n), plot_cost)
+    ax = plt.gca().twinx()
+    ax.plot(np.arange(n), plot_mse, '--')
 
     return x_cur.reshape(v_shape)
 
@@ -588,6 +589,7 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     BP = lambda x: gpu_bp(pg, vg, x.reshape(r.shape), proj_id).flatten()
 
     # FP(x)[m] >= bound <-> bound - FP(x)[m] <= 0
+    bound_log = 0.95 * bound_log
     def bc_func(x):
         f = FP(x)
         return bound_log - f[m]
@@ -617,6 +619,8 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     # import pdb; pdb.set_trace()
 
     bound_constraints = (bc_func, bc_grad, bc_project)
+
+    hb = HoughBarrier(FP, BP, m, bound_log, r)
 
     # x >= 0 constraints
     def nonzero_project(x):
@@ -658,14 +662,23 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     
     ans, stats = barrier_method.barrier_method(x_cur,
         (cost, grad),
-        ineq_dict={'bound': bound_constraints,
+        ineq_dict={'bound': hb,
                    'morezero': morezero_constraints},
         n_iter=100,
         n_biter=10,
         t0=0.1,
-        t_step=0.2,
+        t_step=0.1,
         beta_reg=1.0)
 
+    x_cur_new = 1e-2 + np.zeros(v_shape, dtype='float32').flatten()
+    ans_no_ineq, stats_no_ineq = barrier_method.barrier_method(x_cur_new,
+        (cost, grad),
+        ineq_dict={'morezero': morezero_constraints},
+        n_iter=100,
+        n_biter=10,
+        t0=0.1,
+        t_step=0.1,
+        beta_reg=1.0)
 
     #x_cur = opt.fmin_cg(lambda x: cost(x, alpha),
     #                    x_cur,
@@ -683,7 +696,7 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     # ax = plt.gca().twinx()
     # ax.plot(np.arange(n), plot_mse, '--')
 
-    return ans.reshape(v_shape), stats
+    return ans.reshape(v_shape), stats, ans_no_ineq.reshape(v_shape), stats_no_ineq
 
 
 def run_all_experiments():
@@ -701,13 +714,15 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
         f.add_axes([0.05, 0.05, 0.44, 0.9]),
         f.add_axes([0.51, 0.05, 0.44, 0.9])
     ]
-    im1 = ax[0].imshow(image1, cmap=plt.cm.pink, interpolation='none')
+    im1 = ax[0].imshow(image1, cmap=plt.cm.pink, interpolation='none',
+                       vmin=bounds2[0], vmax=bounds2[-1])
     ax[0].get_xaxis().set_visible(False)
     ax[0].get_yaxis().set_visible(False)
     ax[0].set_title(title1)
     f.colorbar(im1, ax=ax[0], shrink=0.9,  boundaries=bounds1)
 
-    im2 = ax[1].imshow(image2, cmap=plt.cm.pink, interpolation='none')
+    im2 = ax[1].imshow(image2, cmap=plt.cm.pink, interpolation='none', 
+                       vmin=bounds2[0], vmax=bounds2[-1])
     ax[1].get_xaxis().set_visible(False)
     ax[1].get_yaxis().set_visible(False)
     ax[1].set_title(title2)
@@ -716,15 +731,23 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
     plt.savefig(name)
     return
 
-x3 = None
+
 def main():
     global x3
+    global x4
+    global x3_stats
+    global x4_stats
     # e1_prepare_data()
     # run_all_experiments()
+    # i0 = 1e3
+    # n_angles = 90
+    # size_x = 64
+    # bound = 8
+
     i0 = 1e3
-    n_angles = 90
-    size_x = 64
-    bound = 8
+    n_angles = 512
+    size_x = 256
+    bound = 2
 
     d = datetime.datetime.now()
     np.random.seed(d.microsecond + d.hour + d.minute + d.second)
@@ -734,6 +757,18 @@ def main():
     pr = item['projections'][0]
     proj_id = item['projector']
     v = item['original']
+
+    # plt.figure();
+    # 
+    # plt.subplot(121)
+    # plt.imshow(v)
+    # 
+    # plt.subplot(122)
+    # #plt.imshow((np.log(i0) - np.log(pr)).T)
+    # plt.imshow(pr.T)
+    # 
+    # plt.show()
+    # sys.exit(0)
 
     print 'min value of sinogram:'
     print pr.min()
@@ -763,8 +798,7 @@ def main():
     # x3[x3 < 0] = 0
     # x4[x4 < 0] = 0
 
-    x3, run_stats = barrier_least_squares(i0, pg, vg, pr, proj_id, bound, 100, orig=item['original'])
-    x4 = x3
+    x3, x3_stats, x4, x4_stats = barrier_least_squares(i0, pg, vg, pr, proj_id, bound, 100, orig=item['original'])
 
     x5 = ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, 300, orig=item['original'])
     x6 = mask_linear_least_squares(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
@@ -773,13 +807,12 @@ def main():
 
 
 
-    v_max = np.amax([x1.max(), x2.max(), x3.max(), x4.max(), x5.max(), x6.max()])
-    print v_max
-
+    v_max = np.amax([x1.max(), x2.max(), x5.max(), x6.max()])
     bounds = np.arange(0.0, v_max, v_max/5)
     save_image(x1, x2, 'SIRT', 'FBP', 'sample1.png', bounds, bounds)
     save_image(x3, x4, 'QP with inequalities', 'QP without inequalities', 'sample2.png', bounds, bounds)
     save_image(x5, x6, 'Soft Inequalities method', 'Missing Data method', 'sample3.png', bounds, bounds)
+    return -x1, x2, x3, x4, x5, x6, x3_stats, x4_stats
 
 if __name__ == '__main__':
-    main()
+    x1, x2, x3, x4, x5, x6, x3_stats, x4_stats = main()
