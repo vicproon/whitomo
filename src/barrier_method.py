@@ -144,7 +144,6 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
 
 #                opt_stats.append((goal_stat, reg_stats, bf_stats))
                 add_stat_cb((goal_stat, reg_stats, bf_stats))
-
             x = x + step
 
         t = t * t_step
