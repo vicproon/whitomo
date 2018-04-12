@@ -190,7 +190,7 @@ def cpu_fbp(pg, vg, proj_id, sm, n_iters=100):
 
 def create_projection_with_poisson_noise(i0, pg, vg, v, pj):
     r = gpu_fp(pg, vg, v, pj)
-    p = i0*np.exp(-r)
+    p = np.exp(np.log(i0) - r)
     p = np.random.poisson(lam=p.flatten()).astype('float32').reshape(r.shape)
     return p
 
@@ -561,9 +561,9 @@ def ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
                         maxiter=2000,
                         callback=cb)
 
-    print(opt.check_grad(lambda x: cost(x, alpha),
-                         lambda x: grad(x, alpha),
-                         x_cur))
+    # print(opt.check_grad(lambda x: cost(x, alpha),
+    #                      lambda x: grad(x, alpha),
+    #                      x_cur))
 
     n = len(plot_cost)
     plt.figure()
@@ -677,7 +677,7 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
         n_iter=100,
         n_biter=10,
         t0=0.1,
-        t_step=0.1,
+        t_step=0.2,
         beta_reg=1.0)
 
     #x_cur = opt.fmin_cg(lambda x: cost(x, alpha),
@@ -714,14 +714,16 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
         f.add_axes([0.05, 0.05, 0.44, 0.9]),
         f.add_axes([0.51, 0.05, 0.44, 0.9])
     ]
-    im1 = ax[0].imshow(image1, cmap=plt.cm.pink, interpolation='none',
+    # cmap = plt.cm.pink
+    cmap = plt.cm.viridis
+    im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
                        vmin=bounds2[0], vmax=bounds2[-1])
     ax[0].get_xaxis().set_visible(False)
     ax[0].get_yaxis().set_visible(False)
     ax[0].set_title(title1)
     f.colorbar(im1, ax=ax[0], shrink=0.9,  boundaries=bounds1)
 
-    im2 = ax[1].imshow(image2, cmap=plt.cm.pink, interpolation='none', 
+    im2 = ax[1].imshow(image2, cmap=cmap, interpolation='none', 
                        vmin=bounds2[0], vmax=bounds2[-1])
     ax[1].get_xaxis().set_visible(False)
     ax[1].get_yaxis().set_visible(False)
@@ -739,15 +741,15 @@ def main():
     global x4_stats
     # e1_prepare_data()
     # run_all_experiments()
-    # i0 = 1e3
-    # n_angles = 90
-    # size_x = 64
-    # bound = 8
+    i0 = 1e9
+    n_angles = 90
+    size_x = 64
+    bound = 8
 
-    i0 = 1e3
-    n_angles = 512
-    size_x = 256
-    bound = 2
+    # i0 = 1e3
+    # n_angles = 512
+    # size_x = 256
+    # bound = 2
 
     d = datetime.datetime.now()
     np.random.seed(d.microsecond + d.hour + d.minute + d.second)
@@ -789,7 +791,8 @@ def main():
     x2 = fbp(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x1[x1 < 0] = 0
     x2[x2 < 0] = 0
-
+    np.savetxt('x1.nptxt', x1)
+    np.savetxt('x2.nptxt', x2)
     # solves = quadratic_programming(pg, vg, v, proj_id, n_angles, r, bound)
     # x3 = np.array(solves['inequalities'])
     # x3 = x3.reshape(x2.shape)
@@ -799,12 +802,15 @@ def main():
     # x4[x4 < 0] = 0
 
     x3, x3_stats, x4, x4_stats = barrier_least_squares(i0, pg, vg, pr, proj_id, bound, 100, orig=item['original'])
+    np.savetxt('x3.nptxt', x3)
+    np.savetxt('x4.nptxt', x4)
 
     x5 = ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, 300, orig=item['original'])
     x6 = mask_linear_least_squares(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x5[x5 < 0] = 0
     x6[x6 < 0] = 0
-
+    np.savetxt('x5.nptxt', x5)
+    np.savetxt('x6.nptxt', x6)
 
 
     v_max = np.amax([x1.max(), x2.max(), x5.max(), x6.max()])
