@@ -1,6 +1,6 @@
 # /usr/bin/python
 # coding=utf-8
-# from __future__ import absolute_import
+from __future__ import print_function
 
 import astra
 import numpy as np
@@ -26,6 +26,12 @@ from barrier import HoughBarrier
 import logging as log
 log.basicConfig(level=log.INFO)
 import multiprocessing
+
+import collections
+
+cmap = 'pink'
+# cmap = 'viridis'
+plt.rcParams['image.cmap'] = cmap
 
 def create_phantom_tooth(size_x, energy, elem_tooth, elem_implant, pixel_size, isimplant):
     """
@@ -574,6 +580,74 @@ def ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     return x_cur.reshape(v_shape)
 
 
+# Result plotting function for barrier method
+def plot_x(x, iter, num, show=True, save=False, out='movie'):
+    fig = plt.figure()
+    im0 = plt.imshow(x, vmin=-0.1, vmax=7)
+    plt.title('barrier method')
+    plt.suptitle('Iteration %d' % iter)
+    plt.tight_layout()
+    if save:
+        try:
+            os.makedirs(out)
+        except os.error:
+            pass
+
+        plt.savefig(os.path.join(out, '%04d.png' % num),
+            dpi=150)
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+opt_stats = collections.deque([], maxlen=5000)
+stat_iter = 0
+
+def stat_cb(statrecord):
+    global opt_stats
+    global stat_iter
+    out = 'movie_qp_64'
+    opt_stats.append(statrecord)
+    x = statrecord[0].x.reshape((64, 64))
+    plot_x(x, stat_iter * 10, stat_iter, show=False, save=True, out=out)
+    stat_iter += 1
+
+def plot_stats(opt_stats):
+    # ==============
+    # stat plots
+    x = np.arange(len(opt_stats))
+    loss = np.array([stat[0].func for stat in opt_stats])
+    grad_norm = np.array([np.linalg.norm(stat[0].grad) for stat in opt_stats])
+
+    bound = np.array([(-np.exp(-stat[2]['bound'].func)).max() for stat in opt_stats])
+    grad_norm_bound = np.array([np.linalg.norm(stat[2]['bound'].grad) for stat in opt_stats])
+
+    morezero = np.array([(-np.exp(-stat[2]['morezero'].func)).max() for stat in opt_stats])
+    grad_norm_morezero = np.array([np.linalg.norm(stat[2]['morezero'].grad) for stat in opt_stats])
+
+    plt.subplot(221)
+    plt.plot(x, loss)
+    plt.title('goal loss')
+
+    plt.subplot(222)
+    plt.plot(x, grad_norm)
+    plt.title('goal grad norm')
+
+    plt.subplot(223)
+    plt.plot(x, bound, x , morezero)
+    plt.legend(['$Wf \geq \delta$', '$f \geq 0$'])
+    plt.title('max constraints values')
+
+    plt.subplot(224)
+    plt.plot(x, grad_norm_bound, x, grad_norm_morezero)
+    plt.legend(['$Wf \geq \delta$', '$f \geq 0$'])
+    plt.title('grad norms for barrier functions')
+    plt.tight_layout()
+    plt.savefig('barrier_method_plots.png', dpi=400)
+    plt.show()
+
+
 def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     r, m = ray_transform_from_projection(pr, bound, i0)
     # после этого в r[m] лежит log(i0) - log(bound)
@@ -652,7 +726,7 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     def cb(x):
         global counter
         counter += 1
-        print "iteration %d, cost: %.2f" % (counter, cost(x, alpha))
+        print("iteration %d, cost: %.2f" % (counter, cost(x, alpha)))
         return None
         # plot_cost.append(cost(x, alpha))
         # plot_mse.append(mse(x, orig.flatten()))
@@ -664,11 +738,16 @@ def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
         (cost, grad),
         ineq_dict={'bound': hb,
                    'morezero': morezero_constraints},
-        n_iter=100,
+        n_iter=200,
         n_biter=10,
-        t0=0.1,
-        t_step=0.1,
-        beta_reg=1.0)
+        t0=0.2,
+        t_step=0.2,
+        beta_reg=1.0,
+        add_stat_cb=stat_cb,
+        alpha=0.1,
+        max_iter=400,
+        do_alpha_decay=False)
+    plot_stats(opt_stats)
 
     x_cur_new = 1e-2 + np.zeros(v_shape, dtype='float32').flatten()
     ans_no_ineq, stats_no_ineq = barrier_method.barrier_method(x_cur_new,
@@ -714,8 +793,7 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
         f.add_axes([0.05, 0.05, 0.44, 0.9]),
         f.add_axes([0.51, 0.05, 0.44, 0.9])
     ]
-    # cmap = plt.cm.pink
-    cmap = plt.cm.viridis
+
     im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
                        vmin=bounds2[0], vmax=bounds2[-1])
     ax[0].get_xaxis().set_visible(False)
@@ -772,21 +850,22 @@ def main():
     # plt.show()
     # sys.exit(0)
 
-    print 'min value of sinogram:'
-    print pr.min()
-    print '\nmax value of sinogram:'
-    print pr.max()
+    print('min value of sinogram:')
+    print(pr.min())
+    print('\nmax value of sinogram:')
+    print(pr.max())
 
     r, m = ray_transform_from_projection(pr, bound, i0)
     r[m] = np.log(i0 / bound) # prun : этого не нужно, в ray_transform это уже учтено
-    print r.shape
+    print(r.shape)
     np.savetxt('sinogram.txt', r)
     v_max = v.max()
     bounds1 =  np.arange(0, v_max, v_max/5)
     v_max = r.max()
     bounds2 =  np.arange(0, v_max, v_max/5)
+    bounds1 = np.linspace(0, 4.23, 9)
     save_image(v, r.T, 'Phantom', 'Sinogram', 'sample.png', bounds1, bounds2)
-
+    sys.exit(0)
     x1 = sirt(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x2 = fbp(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x1[x1 < 0] = 0
@@ -818,7 +897,102 @@ def main():
     save_image(x1, x2, 'SIRT', 'FBP', 'sample1.png', bounds, bounds)
     save_image(x3, x4, 'QP with inequalities', 'QP without inequalities', 'sample2.png', bounds, bounds)
     save_image(x5, x6, 'Soft Inequalities method', 'Missing Data method', 'sample3.png', bounds, bounds)
-    return -x1, x2, x3, x4, x5, x6, x3_stats, x4_stats
+    return x1, x2, x3, x4, x5, x6, x3_stats, x4_stats
 
 if __name__ == '__main__':
     x1, x2, x3, x4, x5, x6, x3_stats, x4_stats = main()
+
+
+def save_3_images(image1, image2, image3,
+                  title1, title2, title3,
+                  bounds, name):
+    global cmap
+    f, ax = plt.subplots(1, 3, figsize=(13, 4), sharey=True)
+    im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[0].set_xlim((0, image1.shape[1]))
+    ax[0].set_ylim((0, image1.shape[0]))
+    ax[0].get_xaxis().set_visible(False)
+    ax[0].get_yaxis().set_visible(False)
+    ax[0].set_title(title1)
+   # f.colorbar(im1, ax=ax[0], shrink=0.9,  boundaries=bounds)
+
+    im2 = ax[1].imshow(image2, cmap=cmap, interpolation='none', 
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[1].set_xlim((0, image1.shape[1]))
+    ax[1].set_ylim((0, image1.shape[0]))
+    ax[1].get_xaxis().set_visible(False)
+    ax[1].get_yaxis().set_visible(False)
+    ax[1].set_title(title2)
+   # f.colorbar(im2, ax=ax[1], shrink=0.9,  boundaries=bounds)
+
+    im3 = ax[2].imshow(image3, cmap=cmap, interpolation='none', 
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[2].set_xlim((0, image1.shape[1]))
+    ax[2].set_ylim((0, image1.shape[0]))
+    ax[2].get_xaxis().set_visible(False)
+    ax[2].get_yaxis().set_visible(False)
+    ax[2].set_title(title3)
+    f.colorbar(im3, ax=ax[2], shrink=0.9,  boundaries=bounds)
+    plt.tight_layout()
+    plt.savefig(name)
+    plt.show()
+    return
+
+save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_pink.png')
+cmap = 'viridis'
+save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome.png')
+cmap = 'hot'
+save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_hot.png')
+
+def save_4_images(image1, image2, image3, image4,
+                  title1, title2, title3, title4,
+                  bounds, name):
+    global cmap
+    f, ax = plt.subplots(2, 2, figsize=(10, 8), sharey=True)
+    ax = ax.flatten()
+    im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[0].set_xlim((0, image1.shape[1]))
+    ax[0].set_ylim((0, image1.shape[0]))
+    ax[0].get_xaxis().set_visible(False)
+    ax[0].get_yaxis().set_visible(False)
+    ax[0].set_title(title1)
+   # f.colorbar(im1, ax=ax[0], shrink=0.9,  boundaries=bounds)
+
+    im2 = ax[1].imshow(image2, cmap=cmap, interpolation='none', 
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[1].set_xlim((0, image1.shape[1]))
+    ax[1].set_ylim((0, image1.shape[0]))
+    ax[1].get_xaxis().set_visible(False)
+    ax[1].get_yaxis().set_visible(False)
+    ax[1].set_title(title2)
+    f.colorbar(im2, ax=ax[1], shrink=0.9,  boundaries=bounds)
+
+    im3 = ax[2].imshow(image3, cmap=cmap, interpolation='none', 
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[2].set_xlim((0, image1.shape[1]))
+    ax[2].set_ylim((0, image1.shape[0]))
+    ax[2].get_xaxis().set_visible(False)
+    ax[2].get_yaxis().set_visible(False)
+    ax[2].set_title(title3)
+    # f.colorbar(im3, ax=ax[2], shrink=0.9,  boundaries=bounds)
+
+    im4 = ax[3].imshow(image4, cmap=cmap, interpolation='none', 
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[3].set_xlim((0, image1.shape[1]))
+    ax[3].set_ylim((0, image1.shape[0]))
+    ax[3].get_xaxis().set_visible(False)
+    ax[3].get_yaxis().set_visible(False)
+    ax[3].set_title(title4)
+    f.colorbar(im4, ax=ax[3], shrink=0.9,  boundaries=bounds)
+
+    plt.tight_layout()
+    plt.savefig(name)
+    plt.show()
+    return
+
+cmap = 'pink'
+save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome_pink.png')
+cmap = 'viridis'
+save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome.png')

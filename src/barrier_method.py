@@ -78,7 +78,8 @@ class BarrierFunction(object):
 
 def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=1.0, n_biter=10, alpha=0.1,
                    beta_reg = 1.0, t_step = 0.1,
-                   add_stat_cb=None):
+                   add_stat_cb=None, max_iter=1000,
+                   do_alpha_decay=True):
     '''performs minimization of goal_function with regularization functions from
     reg_dict subject to inequality constraints from ineq_dict (in form of g(x) <= 0)
     using gradient descent with barrier functions.
@@ -177,15 +178,18 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
                 #       'step: ', i_iter, 'out of', n_iter)
 
 #                opt_stats.append((goal_stat, reg_stats, bf_stats))
-                add_stat_cb((goal_stat, reg_stats, bf_stats))
+
+                if add_stat_cb is not None:
+                    add_stat_cb((goal_stat, reg_stats, bf_stats))
 
             x = x + step
 
         t = t * t_step
-        alpha = alpha * t_step
-        n_iter = int(n_iter / t_step)
-        if n_iter > 1000:
-            n_iter = 1000
+        if do_alpha_decay:
+            alpha = alpha * t_step
+            n_iter = int(n_iter / t_step)
+            if n_iter > max_iter:
+                n_iter = max_iter
         print('')
 
     return x , opt_stats
