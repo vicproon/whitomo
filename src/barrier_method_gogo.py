@@ -15,7 +15,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import collections
 
 
-
 input_data_dict = phantoms.get_input('button_4_synth')
 
 energy_grid = input_data_dict['grid']

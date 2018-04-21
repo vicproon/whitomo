@@ -26,7 +26,6 @@ from barrier import HoughBarrier
 import logging as log
 log.basicConfig(level=log.INFO)
 import multiprocessing
-
 import collections
 
 cmap = 'pink'
@@ -579,7 +578,6 @@ def ineq_linear_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
 
     return x_cur.reshape(v_shape)
 
-
 # Result plotting function for barrier method
 def plot_x(x, iter, num, show=True, save=False, out='movie'):
     fig = plt.figure()
@@ -646,8 +644,7 @@ def plot_stats(opt_stats):
     plt.tight_layout()
     plt.savefig('barrier_method_plots.png', dpi=400)
     plt.show()
-
-
+    
 def barrier_least_squares(i0, pg, vg, pr, proj_id, bound, alpha, orig=None):
     r, m = ray_transform_from_projection(pr, bound, i0)
     # после этого в r[m] лежит log(i0) - log(bound)
@@ -793,7 +790,6 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
         f.add_axes([0.05, 0.05, 0.44, 0.9]),
         f.add_axes([0.51, 0.05, 0.44, 0.9])
     ]
-
     im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
                        vmin=bounds2[0], vmax=bounds2[-1])
     ax[0].get_xaxis().set_visible(False)
@@ -828,7 +824,6 @@ def main():
     # n_angles = 512
     # size_x = 256
     # bound = 2
-
     d = datetime.datetime.now()
     np.random.seed(d.microsecond + d.hour + d.minute + d.second)
     item = create_data_sample(i0, size_x, n_angles, 1)
@@ -888,9 +883,9 @@ def main():
     x6 = mask_linear_least_squares(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x5[x5 < 0] = 0
     x6[x6 < 0] = 0
+
     np.savetxt('x5.nptxt', x5)
     np.savetxt('x6.nptxt', x6)
-
 
     v_max = np.amax([x1.max(), x2.max(), x5.max(), x6.max()])
     bounds = np.arange(0.0, v_max, v_max/5)
@@ -996,3 +991,5 @@ cmap = 'pink'
 save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome_pink.png')
 cmap = 'viridis'
 save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome.png')
+if __name__ == '__main__':
+    x1, x2, x3, x4, x5, x6, x3_stats, x4_stats = main()
