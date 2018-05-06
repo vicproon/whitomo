@@ -156,7 +156,8 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
     x = x0
     opt_stats = []
     for i_biter in range(n_biter):
-
+        prev_loss = None
+        no_progress_count = 0
         print('starting ', i_biter, 'barrier iteration.')
         for i_iter in range(n_iter):
             goal_grad = goal_function[1](x)
@@ -201,9 +202,9 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
             if n_steps_without_progress is not None:
                 loss = goal_function[0](x)
                 for k, v in reg_dict.iteritems():
-                    loss += beta_reg * v[0](x)
+                    loss += np.sum(np.ravel(beta_reg * v[0](x)))
                 for k,v in bf.iteritems():
-                    loss += beta_reg * t * v[0](x)
+                    loss += np.sum(np.ravel(beta_reg * t * v[0](x)))
 
                 if prev_loss is not None:
                     if prev_loss - loss >= min_delta_loss:
@@ -223,7 +224,7 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
 
         t = t * t_step
         if do_alpha_decay:
-            alpha = alpha * t_step
+            alpha = alpha * np.sqrt(t_step)
             n_iter = int(n_iter / t_step)
             if n_iter > max_iter:
                 n_iter = max_iter
