@@ -84,10 +84,14 @@ ineq_reg = (lambda x: ir_beta * np.abs(x[0] * x[1]),
 # initialize C constraints
 
 # c >= 0, i.e. -c <= 0
-conc_non_negative = (lambda x: -x, lambda x: -np.ones_like(x))
+conc_non_negative = (lambda x: -x,
+                     lambda x: -np.ones_like(x),
+                     lambda x: np.clip(x, 0, x.max()))
 
 # c <= 1, i.e. c - 1 <= 0
-conc_less_than_one = (lambda x: x - 1, lambda x: np.ones_like(x))
+conc_less_than_one = (lambda x: x - 1,
+                      lambda x: np.ones_like(x),
+                      lambda x: np.clip(x, x.min(), 1))
 
 # ==============
 # Setup stat callback
@@ -127,15 +131,48 @@ def plot_x(x, iter, num, show=True, save=False, out='../../exp_results/movie'):
 opt_stats = collections.deque([], maxlen=5000)
 stat_iter = 0
 
+
+
+def plot_x_2(x, iter, num, show=True, save=False, out='../../exp_results/movie'):
+    x1 = x[0]
+    x2 = x[1]
+
+    # need smth like x1 * (255, 0, 0) + x2 * (0, 255, 0)
+
+    img = np.expand_dims(x1, 2) * np.array([[[255, 0, 0]]], dtype=x1.dtype) + \
+          np.expand_dims(x2, 2) * np.array([[[0, 255, 0]]], dtype=x1.dtype)
+    img = np.clip(img, 0, 255).astype(np.uint8)
+    fig = plt.figure()
+    plt.imshow(img)
+    plt.title('Iteration %d' % iter)
+    if save:
+        try:
+            os.makedirs(out)
+        except os.error:
+            pass
+
+        plt.savefig(os.path.join(out, '%04d_comb.png' % num),
+            dpi=150)
+        np.savetxt(os.path.join(out, 'x0_%04d.nptxt' % num), x[0])
+        np.savetxt(os.path.join(out, 'x1_%04d.nptxt' % num), x[1])
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
 def stat_cb(statrecord):
     global opt_stats
     global stat_iter
-    out = '../../exp_results/movie3'
+    out = '../../exp_results/movie4'
     opt_stats.append(statrecord)
     x = statrecord[0].x
     plot_x(x, stat_iter * 10, stat_iter, show=False, save=True, out=out)
+    plot_x_2(x, stat_iter * 10, stat_iter, show=False, save=True, out=out)
     stat_iter += 1
 
+plot_x(gt_concentrations, 0, 0, show=False, save=True, out='../../exp_results/movie4/gt')
+plot_x_2(gt_concentrations, 0, 0, show=False, save=True, out='../../exp_results/movie4/gt')
 
 # ==============
 # run barrier method with C constraints only
@@ -145,12 +182,15 @@ ans, opt_stats1 = barrier_method.barrier_method(concentrations,
     ineq_dict={'conc_non_negative': conc_non_negative,
                'conc_less_than_one': conc_less_than_one},
     n_iter=50,
-    n_biter=10,
+    n_biter=20,
     t0=0.1,
     t_step=0.5,
     beta_reg=1.0,
     alpha=1.0,
-    add_stat_cb=stat_cb)
+    add_stat_cb=stat_cb,
+    max_iter=5000,
+    n_steps_without_progress=15
+    )
 
 plt.subplot(121)
 plt.imshow(ans[0])

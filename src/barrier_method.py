@@ -79,7 +79,9 @@ class BarrierFunction(object):
 def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=1.0, n_biter=10, alpha=0.1,
                    beta_reg = 1.0, t_step = 0.1,
                    add_stat_cb=None, max_iter=1000,
-                   do_alpha_decay=True):
+                   do_alpha_decay=True,
+                   min_delta_loss=1e-3,
+                   n_steps_without_progress=None):
     '''performs minimization of goal_function with regularization functions from
     reg_dict subject to inequality constraints from ineq_dict (in form of g(x) <= 0)
     using gradient descent with barrier functions.
@@ -89,15 +91,27 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
 
     :param x0 initial FEASIBLE solution
     :param goal_function tuple of $(f(x), \\nabla f(x))$ function objects
-    :param reg_dict a dict of {'reg_name': (r(x), \\nabla r(x))}. r(x) can be None.
-    :param ineq_dict a dict of {'ineq_name': (g(x), \\nabla g(x)}, tuple is used as an arg for BarrierFunction
+    :param reg_dict a dict of {'reg_name': (r(x), \\nabla r(x))}. r(x) 
+           can be None.
+    :param ineq_dict a dict of {'ineq_name': (g(x), \\nabla g(x)}, tuple is used
+           as an arg for BarrierFunction
     :param n_iter number of gradient steps for each barreir methor t val
     :param t0 starting t parameter
     :param n_biter number of differet t steps in barrier method. 
     :param aplha gradient step size
-    :param beta_reg common relaxation parameter for regularization terms (both reg and ineq)
+    :param beta_reg common relaxation parameter for regularization terms (both
+           reg and ineq)
     :param t_step exponential step of t decay
-    :param add_stat_cb callback on iteration add. takes a 3-tuple of goal, reg and ineq stepstat vals
+    :param add_stat_cb callback on iteration add. takes a 3-tuple of goal, reg
+           and ineq stepstat vals
+    :param max_iter bound max iter in consequent t steps (their number grow as
+           gradient step shrinks)
+    :param do_alpha_decay reduce gradient update relaxation parameter with 
+           each t-step
+    :param min_delta_loss minimum reduction of loss to consider it a valuable
+           progress
+    :param n_steps_without_progress switch to next barrier iter if there was no
+           progrees in loss decay for at least this number of steps. Can be None
     '''
     bf_objs={}
     bf = {}
@@ -142,7 +156,8 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
     x = x0
     opt_stats = []
     for i_biter in range(n_biter):
-
+        prev_loss = None
+        no_progress_count = 0
         print('starting ', i_biter, 'barrier iteration.')
         for i_iter in range(n_iter):
             goal_grad = goal_function[1](x)
@@ -184,9 +199,32 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
 
             x = x + step
 
+            if n_steps_without_progress is not None:
+                loss = goal_function[0](x)
+                for k, v in reg_dict.iteritems():
+                    loss += np.sum(np.ravel(beta_reg * v[0](x)))
+                for k,v in bf.iteritems():
+                    loss += np.sum(np.ravel(beta_reg * t * v[0](x)))
+
+                if prev_loss is not None:
+                    if prev_loss - loss >= min_delta_loss:
+                        no_progress_count = 0
+                    else:
+                        no_progress_count += 1
+
+                # maybe should only update prev loss if there was 
+                # valuable progress: this will lead to oscillations and
+                # will not spot slow valuable progres over several iterations
+                prev_loss = loss
+
+                if no_progress_count >= n_steps_without_progress:
+                    print('stopping barrier step', i_biter, 'on iteration', i_iter,
+                          'because there was no valuable progress')
+                    break
+
         t = t * t_step
         if do_alpha_decay:
-            alpha = alpha * t_step
+            alpha = alpha * np.sqrt(t_step)
             n_iter = int(n_iter / t_step)
             if n_iter > max_iter:
                 n_iter = max_iter
