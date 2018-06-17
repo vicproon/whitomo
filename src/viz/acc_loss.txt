@@ -1,0 +1,3 @@
+name	loss	acc	n_iter	time
+sart	11.8845	0.3278	1	0.9310
+fht_sirt	16.1192	0.3882	40	0.9351

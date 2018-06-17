@@ -1,8 +1,11 @@
+# /usr/bin/python
+# coding=utf-8
+
 '''A script that generates synthetic spectrum for issue9 of
 https://github.com/vicproon/whitomo
 and does a pretty drawing of it.
 '''
-from __future__ import division, absolute_import, print_function
+from __future__ import division, absolute_import, print_function, unicode_literals
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,7 +22,7 @@ spec = bio_data['source']
 abs8, abs6 = bio_data['element_absorptions']
 
 # A helper function for plotting.
-def plot_spectrums(grid, spec, absorptions, elem_names=[]):
+def plot_spectrums(grid, spec, absorptions, elem_names=[], subplots=True, ls=[], color=[]):
     """ Plot element absorptions and energy spectrum using energy grid
     """
     assert grid.shape[0] == spec.shape[0] and grid.shape[0] == absorptions[0].shape[0], \
@@ -43,43 +46,56 @@ def plot_spectrums(grid, spec, absorptions, elem_names=[]):
     minor_xticks = [leftest_xtick] + middle_xticks + [rightest_xtick]
     
     # Begin plotting. First create a figure for plot.
-    plt.figure()
+    f = plt.figure()
 
     # Top -- element absorptions.
-    ax = plt.subplot(211)
+    if subplots:
+        ax = plt.subplot(211)
+    else:
+        ax = f.gca()
     
     # If element names were not provided we should provide them ourselves 
     if len(elem_names) != len(absorptions):
         elem_names = ['elem_%d' % i for i in range(len(absorptions))]
 
     # Create title for subplot.
-    plt.title('Element absorptions')
-    plt.xlabel('E, kev')
+    plt.title('Поглощение компонент на различных энергиях')
+    plt.xlabel('Энергия, кэВ')
     ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     ax.set_xticks([2.5, 10])
     ax.set_xticks(minor_xticks, minor=True)
     ax.set_yticks([2000, 4000])
-    plt.ylabel('$\mu$', rotation=0)
+    plt.ylabel('$\mu$, отн. ед.')
     plt.grid(True, linestyle='--')
     
     # Plot graphs.
-    for Y in absorptions:
-        plt.plot(X, Y)
+    for i, Y in enumerate(absorptions):
+        if ls is not None:
+            plt.plot(X, Y, linestyle=ls[i], color=color[i])
+        else:
+            plt.plot(X, Y)
+
 
     # Create legend.
     plt.legend(elem_names)
-
+    f.savefig('element_absorptions.png', dpi=400)
     # Bottom -- source spectrum
-    ax = plt.subplot(212)
-    plt.title('Energy spectrum')
-    plt.xlabel('E, kev')
+    if subplots:
+        ax = plt.subplot(212)
+    else:
+        f = plt.figure()
+        ax = f.gca()
+
+    plt.title('Спектр излучения')
+    plt.xlabel('Энергия, кэВ')
+    plt.ylabel('Интенсивность, отн. ед.')
     ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     ax.set_xticks([2.5, 10])
     ax.set_xticks(minor_xticks, minor=True)
     ax.set_yticks([1, 2])
     plt.grid(True, linestyle='--')
-    plt.plot(X, spec)
-
+    plt.plot(X, spec, color='black')
+    f.savefig('spectre.png', dpi=400)
 
     # Shot plots
     plt.show()
@@ -179,4 +195,4 @@ new_spec[peak_for[1]] = 2.0
 
 new_widths = new_x[1:] - new_x[:-1]
 new_grid = np.vstack([new_x, np.array([new_widths[0]] + list(new_widths))]).T
-plot_spectrums(new_grid, new_spec, new_abs)
+plot_spectrums(new_grid, new_spec, new_abs, elem_names=['Элемент 1', 'Элемент 2'], ls=['-', '--'], color=['black', 'black'], subplots=False)
