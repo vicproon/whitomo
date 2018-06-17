@@ -200,22 +200,24 @@ def create_projection_with_poisson_noise(i0, pg, vg, v, pj):
     return p
 
 def create_data_sample(i0, size, n_angles, n_samples):
-    if (size == 8):
+    if (size == 10):
         phantom = np.zeros((size,size))
-        phantom[3,6] = 160
-        phantom[5,6] = 160
-        phantom[4,5] = 160
-        phantom[4,7] = 160
+        phantom[3,7] = 160
+        phantom[5,7] = 160
+        phantom[4,6] = 160
+        phantom[4,8] = 160
         phantom[1,3] = 250
         phantom[1,4] = 250
         phantom[2,2] = 250
-        phantom[2,1] = 250
-        phantom[3,1] = 250
-        phantom[4,1] = 250
-        phantom[5,1] = 250
-        phantom[6,2] = 250
-        phantom[7,3] = 250
+        phantom[2,3] = 250
+        phantom[3,2] = 250
+        phantom[4,2] = 250
+        phantom[5,2] = 250
+        phantom[6,3] = 250
         phantom[7,4] = 250
+        phantom[8,5] = 250
+        phantom[8,6] = 250
+        phantom[8,7] = 250
 
         original = phantom
     else:
@@ -894,8 +896,6 @@ def main():
     save_image(x5, x6, 'Soft Inequalities method', 'Missing Data method', 'sample3.png', bounds, bounds)
     return x1, x2, x3, x4, x5, x6, x3_stats, x4_stats
 
-if __name__ == '__main__':
-    x1, x2, x3, x4, x5, x6, x3_stats, x4_stats = main()
 
 
 def save_3_images(image1, image2, image3,
@@ -933,12 +933,6 @@ def save_3_images(image1, image2, image3,
     plt.savefig(name)
     plt.show()
     return
-
-save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_pink.png')
-cmap = 'viridis'
-save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome.png')
-cmap = 'hot'
-save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_hot.png')
 
 def save_4_images(image1, image2, image3, image4,
                   title1, title2, title3, title4,
@@ -987,9 +981,17 @@ def save_4_images(image1, image2, image3, image4,
     plt.show()
     return
 
-cmap = 'pink'
-save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome_pink.png')
-cmap = 'viridis'
-save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome.png')
 if __name__ == '__main__':
     x1, x2, x3, x4, x5, x6, x3_stats, x4_stats = main()
+
+    save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_pink.png')
+    cmap = 'viridis'
+    save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome.png')
+    cmap = 'hot'
+    save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_hot.png')
+
+    cmap = 'pink'
+    save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome_pink.png')
+    cmap = 'viridis'
+    save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome.png')
+
