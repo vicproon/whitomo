@@ -192,6 +192,49 @@ def get_synth_data_b4_small():
     return data
 
 
+import white_projection
+import sys
+sys.path.append('../teeth_recon')
+import teeth_io
+
+def read_teeth_data():
+    # First we can get energy grid in keV, source, and element absorptions using spectre file.
+    spectre = np.loadtxt('../testdata/whitereconstruct/zub/spectre.txt', skiprows=1)
+    grid_vals = spectre[:,0]
+    source = spectre[:, 1]
+    print(source.shape)
+
+    # Grid is given with equal distances of 0.40363636, which can be calculated
+    # from grid_vals, but for simplicity and cleaness of the code i will just use the
+    # hard-coded constant
+    grid_widths = 0.40363636 * np.ones_like(grid_vals)
+    
+    # Finally, the grid is..
+    grid = np.vstack([grid_vals, grid_widths]).T
+    print(grid.shape)
+
+
+    # Now lets get the absorptions: Ca and Pb
+    element_numbers = np.array([20, 82])
+    element_absorptions = absorption(grid[:, 0], element_numbers)
+
+    # The only thing left is reading the sinogram itself
+    pb_data = teeth_io.read_pb_data(820)
+    # Problem is that pb_data is normed and logarithmed. need to undo this.
+    sum_intensity = white_projection.integrate(source, grid)
+    # p = log(i0 / i)
+    # i = I0 exp (-p)
+    proj_data = sum_intensity * np.exp(pb_data['data'])
+
+    return {'grid': grid, 
+            'source': source,
+            'pixel_size': 1e-8, # adjust for numerical stability
+            'element_numbers': element_numbers,
+            'element_absorptions': element_absorptions,
+            'proj_data': proj_data,
+            'angles': pb_data['angles']}
+
+
 __proxy_dict={'eggs': get_eggs_data,
               'eggs_delta_spectrum': get_eggs_with_delta_spectrum,
               'button': get_button,
@@ -207,7 +250,8 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_3_synth': get_synth_data_small,
               'button_4': get_button_4,
               'button_4_delta_spectrum': get_button_4_delta_spectrum,
-              'button_4_synth': get_synth_data_b4_small}
+              'button_4_synth': get_synth_data_b4_small,
+              'teeth_data': read_teeth_data}
 
 
 def get_input(ph_name='eggs'):
