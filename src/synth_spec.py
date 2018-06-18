@@ -22,12 +22,11 @@ spec = bio_data['source']
 abs8, abs6 = bio_data['element_absorptions']
 
 # A helper function for plotting.
-def plot_spectrums(grid, spec, absorptions, elem_names=[], subplots=True, ls=[], color=[]):
+def plot_spectrums(grid, spec, absorptions, elem_names=[], subplots=True, ls=None, color=None):
     """ Plot element absorptions and energy spectrum using energy grid
     """
     assert grid.shape[0] == spec.shape[0] and grid.shape[0] == absorptions[0].shape[0], \
         'inconsistent array shapes'
-
     # All plot share same X axis -- energy grid
     X = grid[:, 0]
     
@@ -62,9 +61,9 @@ def plot_spectrums(grid, spec, absorptions, elem_names=[], subplots=True, ls=[],
     plt.title('Поглощение компонент на различных энергиях')
     plt.xlabel('Энергия, кэВ')
     ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-    ax.set_xticks([2.5, 10])
+    # ax.set_xticks([2.5, 10])
     ax.set_xticks(minor_xticks, minor=True)
-    ax.set_yticks([2000, 4000])
+    # ax.set_yticks([2000, 4000])
     plt.ylabel('$\mu$, отн. ед.')
     plt.grid(True, linestyle='--')
     
@@ -90,9 +89,9 @@ def plot_spectrums(grid, spec, absorptions, elem_names=[], subplots=True, ls=[],
     plt.xlabel('Энергия, кэВ')
     plt.ylabel('Интенсивность, отн. ед.')
     ax.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-    ax.set_xticks([2.5, 10])
+    # ax.set_xticks([2.5, 10])
     ax.set_xticks(minor_xticks, minor=True)
-    ax.set_yticks([1, 2])
+    # ax.set_yticks([1, 2])
     plt.grid(True, linestyle='--')
     plt.plot(X, spec, color='black')
     f.savefig('spectre.png', dpi=400)
@@ -103,8 +102,11 @@ def plot_spectrums(grid, spec, absorptions, elem_names=[], subplots=True, ls=[],
 
 # Lets plot the data.
 # plot_spectrums(grid, spec, [abs8, abs6 / 10000], ['8', '6'])
+teeth_data = phantoms.get_input('teeth_data')
+plot_spectrums(teeth_data['grid'], teeth_data['source'], teeth_data['element_absorptions'], ['Ca', 'Pb'])
 
-
+import sys
+sys.exit(0)
 
 def before_after_plot(x_before, f_before, x_after, f_after):
     plt.figure()

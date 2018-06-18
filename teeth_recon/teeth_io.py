@@ -47,6 +47,8 @@ def load_data_from_images(slice_line=500):
 def read_data_from_hdf5(in_filename, slice_line):
     with h5py.File(in_filename) as h5f:
         data = h5f['sinogram'][:, :, slice_line]
+
+    # угловой шаг - 0.5 градуса. Данные промерены от 0 до 200 градусов
     angles = (np.arange(data.shape[0]) * 0.5) * np.pi / 180.0
     return {'data' : data, 'angles' : angles}
 

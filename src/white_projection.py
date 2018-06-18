@@ -21,7 +21,7 @@ class WhiteProjection:
     '''
 
     def __init__(self, source, pixel_size, element_numbers, element_absorptions,
-                 energy_grid, ph_size, sinogram=None, n_angles=360):
+                 energy_grid, ph_size, sinogram=None, n_angles=360, angles=None):
         self.dt = np.float64
         self.source_init = source
         self.pixel_size = pixel_size
@@ -30,22 +30,36 @@ class WhiteProjection:
         self.ph_size = ph_size
         self.n_angles = n_angles
         self.energy_grid = energy_grid
-        self.sinogram = sinogram
+        self.sinogram = sinogram.ravel()
+        self.angles = angles
+
+        if sinogram is not None:
+            self.ph_size = (sinogram.shape[1], sinogram.shape[1])
 
         # setup astra geometry
-        self.proj_geom = astra.create_proj_geom(
-            'parallel',
-            1.0,
-            # This should be enough to register full object.
-            int(np.sqrt(2) * ph_size[0] + 1),
-            np.linspace(0, np.pi, n_angles)
-        )
-        self.vol_geom = astra.create_vol_geom(*ph_size)
+        if self.angles is None:
+            self.proj_geom = astra.create_proj_geom(
+                'parallel',
+                1.0,
+                # This should be enough to register full object.
+                int(np.sqrt(2) * self.ph_size[0] + 1),
+                np.linspace(0, np.pi, n_angles)
+            )
+        else:
+            self.n_angles = angles.shape[0]
+            self.proj_geom = astra.create_proj_geom(
+                'parallel',
+                1.0,
+                # This should be enough to register full object.
+                self.ph_size[0],
+                self.angles
+            )
+
+        self.vol_geom = astra.create_vol_geom(*self.ph_size)
         self.projector = astra.create_projector('linear',
                                                 self.proj_geom,
                                                 self.vol_geom)
         self.proj_shape = (self.n_angles, self.proj_geom['DetectorCount'])
-
         self.conc_shape = (len(self.element_numbers), 
                            self.ph_size[0],
                            self.ph_size[1])
