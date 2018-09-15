@@ -46,6 +46,7 @@ class WhiteProjection:
                 np.linspace(0, np.pi, n_angles)
             )
         else:
+            w = int((self.ph_size[0] - 1) / np.sqrt(2))
             self.n_angles = angles.shape[0]
             self.proj_geom = astra.create_proj_geom(
                 'parallel',
@@ -54,6 +55,7 @@ class WhiteProjection:
                 self.ph_size[0],
                 self.angles
             )
+            self.ph_size = (w, w)
 
         self.vol_geom = astra.create_vol_geom(*self.ph_size)
         self.projector = astra.create_projector('linear',
@@ -67,6 +69,8 @@ class WhiteProjection:
         # norm source intensity
         sum_energy = self.integrate(self.source_init)
         self.source = self.source_init / sum_energy
+        if self.sinogram is not None:
+            self.sinogram /= sum_energy
 
     def integrate(self, ar):
         return integrate(ar, self.energy_grid)

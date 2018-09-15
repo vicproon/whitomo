@@ -155,6 +155,7 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
     t = t0
     x = x0
     opt_stats = []
+    glob_iter = 0
     for i_biter in range(n_biter):
         prev_loss = None
         no_progress_count = 0
@@ -178,7 +179,7 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
                 prefix='barrier iter %d/%d' % (i_biter + 1, n_biter),
                 suffix='done (%03d/%03d)' % (i_iter + 1, n_iter), length=50)
 
-            if i_iter % 10 == 0:
+            if glob_iter % 10 == 0 or glob_iter < 30:
                 x_stat = x.copy()
                 goal_stat = StepStat(x_stat, goal_function[0](x), goal_grad.copy())
                 reg_stats = {}
@@ -199,6 +200,11 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
 
             x = x + step
 
+            # ==================
+            # PROJECTION STEP (!! REMOVE IT OR PUT TO PARAM)
+            for _, v in bf_objs.iteritems():
+                x = v.proj(x)
+
             if n_steps_without_progress is not None:
                 loss = goal_function[0](x)
                 for k, v in reg_dict.iteritems():
@@ -218,7 +224,7 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
                 prev_loss = loss
 
                 if no_progress_count >= n_steps_without_progress:
-                    print('stopping barrier step', i_biter, 'on iteration', i_iter,
+                    print('\nstopping barrier step', i_biter, 'on iteration', i_iter,
                           'because there was no valuable progress')
                     break
 
@@ -229,5 +235,6 @@ def barrier_method(x0, goal_function, reg_dict={}, ineq_dict={}, n_iter=200, t0=
             if n_iter > max_iter:
                 n_iter = max_iter
         print('')
+        glob_iter += 1
 
     return x , opt_stats

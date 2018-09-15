@@ -174,10 +174,13 @@ c = np.array(concentrations)
 
 fp = None
 
-uneq_reg_buffer = np.zeros_like(concentrations)
+uneq_reg_buffer = None# np.zeros_like(concentrations)
 
 
 def calc_uneq_reg_grad(c):
+    global uneq_reg_buffer
+    if uneq_reg_buffer is None:
+        uneq_reg_buffer = np.zeros_like(c)
     for i, cc in enumerate(uneq_reg_buffer):
         uneq_reg_buffer[i] = (c[np.arange(len(c)) != i] * np.sign(c[0] * c[1])).sum(axis=0)
     return uneq_reg_buffer

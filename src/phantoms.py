@@ -202,7 +202,6 @@ def read_teeth_data():
     spectre = np.loadtxt('../testdata/whitereconstruct/zub/spectre.txt', skiprows=1)
     grid_vals = spectre[:,0]
     source = spectre[:, 1]
-    print(source.shape)
 
     # Grid is given with equal distances of 0.40363636, which can be calculated
     # from grid_vals, but for simplicity and cleaness of the code i will just use the
@@ -211,7 +210,6 @@ def read_teeth_data():
     
     # Finally, the grid is..
     grid = np.vstack([grid_vals, grid_widths]).T
-    print(grid.shape)
 
 
     # Now lets get the absorptions: Ca and Pb
@@ -224,7 +222,7 @@ def read_teeth_data():
     sum_intensity = white_projection.integrate(source, grid)
     # p = log(i0 / i)
     # i = I0 exp (-p)
-    proj_data = sum_intensity * np.exp(pb_data['data'])
+    proj_data = sum_intensity * np.exp(-pb_data['data'])
 
     return {'grid': grid, 
             'source': source,
@@ -233,6 +231,23 @@ def read_teeth_data():
             'element_absorptions': element_absorptions,
             'proj_data': proj_data,
             'angles': pb_data['angles']}
+
+def shrink(angles, proj, shrink_ratio):
+    angle_ind = np.arange(angles.shape[0], step=shrink_ratio)
+    data_ind = np.arange(proj.shape[1], step=shrink_ratio)
+    new_data = proj[angle_ind, :]
+    new_data = new_data[:, data_ind]
+    new_angles = angles[angle_ind]
+    return new_data, new_angles
+
+def read_teeth_data_small(ratio=4):
+    data = read_teeth_data()
+    small_proj, small_angles = shrink(data['angles'], data['proj_data'], ratio)
+    data['angles'] = small_angles
+    data['proj_data'] = small_proj
+    #data['pixel_size'] = 6.4e-5
+    data['pixel_size'] = 1.3e-4
+    return data
 
 
 __proxy_dict={'eggs': get_eggs_data,
@@ -251,7 +266,8 @@ __proxy_dict={'eggs': get_eggs_data,
               'button_4': get_button_4,
               'button_4_delta_spectrum': get_button_4_delta_spectrum,
               'button_4_synth': get_synth_data_b4_small,
-              'teeth_data': read_teeth_data}
+              'teeth_data': read_teeth_data,
+              'teeth_data_256': lambda : read_teeth_data_small()}
 
 
 def get_input(ph_name='eggs'):

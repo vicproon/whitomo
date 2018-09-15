@@ -14,16 +14,16 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import collections
 
-exp_number = 101
+exp_number = 105
 experiment_desctiption = u'''
-Эксперимент 101
+Эксперимент 105
 
 Нумерация экспериментов по восстановлению зуба с помощью white_rec
 начинается со 101.
 
 Данные: измерения зуба со свинцовой вставкой на молибденовом аноде, 
 по высоте 820 слайс.
-Ширина не изменена.
+Даунскейл до размера 256х256, углов проекции - ???
 Спектральные кривые поглощения в соответствии с xraylib и физикой.
 Спектр анода соответстует присланному.
 
@@ -32,7 +32,7 @@ experiment_desctiption = u'''
 сделать фиктивные спектры.
 '''
 
-inp_name = 'teeth_data'
+inp_name = 'teeth_data_256'
 input_data_dict = phantoms.get_input(inp_name)
 
 energy_grid = input_data_dict['grid']
@@ -45,8 +45,30 @@ element_absorptions = input_data_dict['element_absorptions']
 ph_size = (proj_data.shape[1], proj_data.shape[1])
 n_angles = angles.shape[0]
 
+plt.figure()
+plt.subplot(211)
+plt.plot(energy_grid[:,0], element_absorptions[0])
+plt.plot(energy_grid[:,0], element_absorptions[1])
+plt.legend(['Ca', 'Pb'])
+plt.xlabel(u'энергия, кЭв')
+plt.ylabel(u'$\\kappa$, отн.ед.')
+plt.grid()
+plt.title(u'Спектральные коэффициенты поглощения')
+
+plt.subplot(212)
+plt.plot(energy_grid[:,0], source)
+plt.xlabel(u'энергия, кЭв')
+plt.ylabel(u'интенсивность, отн.ед.')
+plt.grid()
+plt.title(u'Спектр источника')
+
+plt.tight_layout()
+plt.savefig('zub_spectre.png', dpi=350)
+plt.show()
+sys.exit(0)
+
 # parameters of reconstruction
-alpha = 1e-6     # gradient step (aka relaxation aka learning rate)
+alpha = 1         # gradient step (aka relaxation aka learning rate)
 beta_reg = 1e-2   # regularization coefficiten [update = alpha * (BP + beta * reg)]
 
 # set up tomography operator
@@ -56,6 +78,7 @@ wp = white_projection.WhiteProjection(source=source,
     energy_grid=energy_grid, sinogram=proj_data,
     # n_angles=400),
     angles=angles)
+ph_size = wp.ph_size
 
 goal = (lambda x: wp.func(x), lambda x: wp.grad(x))
 
@@ -91,7 +114,7 @@ def test_goal():
 
 # ==============
 # initialize c1*c2 regularisation
-ir_beta = 0.05
+ir_beta = 1.0
 ineq_reg = (lambda x: ir_beta * np.abs(x[0] * x[1]), 
             lambda x: ir_beta * white_rec.calc_uneq_reg_grad(x))
 
@@ -103,12 +126,12 @@ ineq_reg = (lambda x: ir_beta * np.abs(x[0] * x[1]),
 # c >= 0, i.e. -c <= 0
 conc_non_negative = (lambda x: -x,
                      lambda x: -np.ones_like(x),
-                     lambda x: np.clip(x, 0, x.max()))
+                     lambda x: np.clip(x, 1e-4, x.max()))
 
 # c <= 1, i.e. c - 1 <= 0
 conc_less_than_one = (lambda x: x - 1,
                       lambda x: np.ones_like(x),
-                      lambda x: np.clip(x, x.min(), 1))
+                      lambda x: np.clip(x, x.min(), 1 - 1e-4))
 
 # ==============
 # Setup stat callback
@@ -145,7 +168,7 @@ def plot_x(x, iter, num, show=True, save=False, out='../../exp_results/movie'):
         plt.close(fig)
 
 
-opt_stats = collections.deque([], maxlen=5000)
+opt_stats = collections.deque([], maxlen=500)
 stat_iter = 0
 
 
@@ -177,6 +200,19 @@ def plot_x_2(x, iter, num, show=True, save=False, out='../../exp_results/movie')
     else:
         plt.close(fig)
 
+def analyse_grads(x):
+    plt.subplot(221)
+    plt.imshow(x[0])
+    plt.subplot(222)
+    plt.imshow(x[1])
+
+    wfp = wp.FP_white(x)[0].reshape(proj_data.shape)
+    plt.subplot(223)
+    plt.imshow(wfp)
+    plt.subplot(224)
+    plt.imshow(wp.sinogram.reshape(proj_data.shape))
+
+    plt.show()
 
 def stat_cb(statrecord):
     global opt_stats
@@ -185,12 +221,12 @@ def stat_cb(statrecord):
     opt_stats.append(statrecord)
     x = statrecord[0].x
     plot_x(x, stat_iter * 10, stat_iter, show=False, save=True, out=out)
-    plot_x_2(x, stat_iter * 10, stat_iter, show=False, save=True, out=out)
+    plot_x_2(x, stat_iter * 10, stat_iter, show=False, save=True, out=out + '/merged')
     stat_iter += 1
 
 n_iter = 50
 n_biter = 20
-t0 = 0.1
+t0 = 1e-4
 t_step = 0.5
 max_iter = 5000
 n_steps_without_progress=15
@@ -228,7 +264,7 @@ output_exp_stats()
 # run barrier method with C constraints
 ans, opt_stats1 = barrier_method.barrier_method(concentrations,
     goal,
-    # reg_dict={'ineq_reg': ineq_reg},
+    reg_dict={'ineq_reg': ineq_reg},
     ineq_dict={'conc_non_negative': conc_non_negative,
                'conc_less_than_one': conc_less_than_one},
     n_iter=n_iter,
