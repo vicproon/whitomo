@@ -450,7 +450,7 @@ def prepare_weight(pg, vg, v, pj, n_angles):
         for j in range(0, sx):
             vol[i, j] = 1
             s_test = gpu_fp(pg, vg, vol, pj)
-            H[:, z] = s_test.flatten()
+            H[:, z] += s_test.flatten()
             z += 1
             #np.savetxt(str(i) + '_' + str(j) + '_hh.txt', H)
             vol[i,j] = 0
@@ -809,6 +809,70 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
     plt.savefig(name)
     return
 
+def prepare_weights_easy(size, n_angles):
+    proj_geom = astra.create_proj_geom(
+        'parallel',
+        1.0,
+        #int(np.sqrt(2)*size + 1),  # This should be enough to register full object.
+        size,
+        np.linspace(0, np.pi, n_angles)
+    )
+    vol_geom = astra.create_vol_geom((size, size))
+    projector = astra.create_projector('linear', proj_geom, vol_geom)
+    v = np.zeros(shape=(size, size), dtype=np.float64)
+    return prepare_weight(proj_geom, vol_geom, v, projector, n_angles)
+
+def plot_weight_matrix(H, sz, nphi, psz=None, show=True, autoinv=True, out=None, 
+                       figsize_mult=1, grid=True):
+    # Auto inversion of H scale
+    if autoinv:
+        H = H.max() - H
+
+    if psz is None:
+        psz = sz
+
+    # Determine figure aspect ratio based on H shape
+    fh, fw = (1, 1)
+    if H.shape[0] > H.shape[1]:
+        fh = 1 + H.shape[0] / H.shape[1]
+        fw = 1
+    elif H.shape[1] < H.shape[0]:
+        fh = 1
+        fw = 1 + H.shape[1] / H.shape[0]
+    figsize = tuple(int (figsize_mult * dim) + 2 for dim in (fw, fh))
+    print(figsize)
+    f = plt.figure(figsize=figsize)
+    plt.imshow(H, cmap='gray')
+    ax = f.gca()
+    #x_ticks = np.arange(sz / 2, sz * sz, sz)
+    x_ticks = np.arange(-0.5, sz * sz, sz)
+    x_tick_labels = ['%d' % i for i in range(sz)]
+
+    #y_ticks = np.arange(sz / 2, sz * nphi, sz)
+    y_ticks = np.arange(-0.5, psz * nphi, psz)
+    y_tick_labels = ['$\\varphi_{%d}$' % i for i in range(nphi)]
+
+    plt.xticks(x_ticks, x_tick_labels)
+    plt.yticks(y_ticks, y_tick_labels)
+    if grid:
+        plt.grid()
+
+    for item in ax.get_yticklabels():
+        item.set_fontsize(11)
+
+    for item in ax.get_xticklabels():
+        item.set_fontsize(11)
+
+    plt.xlabel(u'f, индексация по строкам')
+    plt.ylabel(u'p, индексация по углам')
+
+    plt.title(u'элементы матрицы W')
+    if out is not None:
+        plt.savefig(out, dpi=450)
+    if show:
+        plt.show()
+
+
 
 def main():
     global x3
@@ -818,8 +882,8 @@ def main():
     # e1_prepare_data()
     # run_all_experiments()
     i0 = 1e9
-    n_angles = 90
-    size_x = 64
+    n_angles = 35
+    size_x = 10
     bound = 8
 
     # i0 = 1e3
@@ -834,7 +898,7 @@ def main():
     pr = item['projections'][0]
     proj_id = item['projector']
     v = item['original']
-
+    sys.exit(0)
     # plt.figure();
     # 
     # plt.subplot(121)
