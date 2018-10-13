@@ -1,2 +1,15 @@
 # whitomo
-research on white beam tomography reconstruction. mostly on python, scipy stack, ASTRA. May be c++ later
+research on tomography reconstruction algorithms.
+
+Right now it includes algorithms described in Prun V.E. Phd Thesis, including barrier method reconstructions for metal artifacts reduction and white beam tomography reconstruction.
+
+Written on python, scipy stack, ASTRA. May be c++ later
+
+
+
+
+TODO: add cites
+
+TODO: add repository roadmap
+
+TODO: tidy up repo and make the structure
