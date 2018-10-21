@@ -4,6 +4,10 @@ from __future__ import absolute_import, unicode_literals, division, print_functi
 import numpy as np
 import scipy.misc
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.gridspec as gridspec
+import matplotlib.ticker as ticker
+
 import astra
 from experiments import AstraProxy, sirt, fbp, ineq_linear_least_squares, \
     mask_linear_least_squares, cpu_sirt, cpu_fbp
@@ -107,6 +111,32 @@ def run_soft_ineq(data, name, alpha, bound):
     # plt.show(block=False)
     np.savetxt(name_suffix, res)
 
+def run_fbp(data, bound):
+    d_pr, M, m = check_bounds(data['data'], bound, 0)
+    pixel_size = 1.0
+    proj_geom = astra.create_proj_geom(
+        'parallel',
+        pixel_size,
+        d_pr.shape[1],
+        data['angles']
+    )
+
+    rec_pix = d_pr.shape[1]
+
+    vol_geom = astra.create_vol_geom(rec_pix, rec_pix)
+    projector = astra.create_projector('linear', proj_geom, vol_geom)
+
+    res = fbp(1.0, proj_geom, vol_geom, np.exp(-d_pr), projector, np.exp(-bound))
+
+    plt.figure()
+    plt.imshow(res, cmap=plt.cm.viridis)
+    plt.colorbar(orientation='vertical')
+    name_suffix = 'FBP'
+    plt.title("FBP")
+    plt.savefig(name_suffix + '.png')
+    np.savetxt(name_suffix, res)
+    return res    
+
 #run_soft_ineq(pb, name='res', alpha=10)
 def shrink(data_dict, shrink_ratio):
     angle_ind = np.arange(data_dict['angles'].shape[0], step=shrink_ratio)
@@ -123,7 +153,9 @@ small_sinodata = shrink(pb, 4)
 #for i, a in enumerate(alphas):
 #    print('alpha =', a, '(%d / %d)' % (i, len(alphas)))
 #    run_soft_ineq(small_sinodata, name='pb_small_exp3', alpha=a, bound=bound)
-run_soft_ineq(small_sinodata, name='pb_small_exp7_nocg', alpha=6.67, bound=bound)
+# run_soft_ineq(small_sinodata, name='pb_small_exp7_nocg', alpha=6.67, bound=bound)
+
+fbp_res = run_fbp(pb, bound=bound)
 
 # if __name__ == '__main__':
 #     main()
@@ -152,3 +184,136 @@ run_soft_ineq(small_sinodata, name='pb_small_exp7_nocg', alpha=6.67, bound=bound
 # x1 = cpu_sirt(proj_geom, vol_geom, projector, flat_normalized, n_iters=200)
 # plt.imshow(x1)
 # plt.show()
+soft_res = np.loadtxt('/home/vic/teeth_recon/pb_big_exp4_a6.7')
+fbp_res = np.flip(fbp_res, 0)
+soft_res = np.flip(soft_res, 0)
+
+def save_2_images(image1, image2,
+                  title1, title2,
+                  bounds, name, cmap='viridis', show=False):
+    f, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
+    im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[0].set_xlim((0, image1.shape[1]))
+    ax[0].set_ylim((image1.shape[0], 0))
+    ax[0].get_xaxis().set_visible(False)
+    ax[0].get_yaxis().set_visible(False)
+    ax[0].set_title(title1)
+    f.colorbar(im1, ax=ax[0], shrink=0.9,  boundaries=bounds)
+
+    im2 = ax[1].imshow(image2, cmap=cmap, interpolation='none', 
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[1].set_xlim((0, image1.shape[1]))
+    ax[1].set_ylim((image1.shape[0], 0))
+    ax[1].get_xaxis().set_visible(False)
+    ax[1].get_yaxis().set_visible(False)
+    ax[1].set_title(title2)
+    f.colorbar(im2, ax=ax[1], shrink=0.9,  boundaries=bounds)
+
+    plt.tight_layout()
+    plt.savefig(name, dpi=300)
+    if show:
+        plt.show()
+    plt.close(f)
+
+
+    y_level = 500
+    x_roi = (450, 800)
+
+    return
+
+def save_2_images_cs(image1, image2,
+                  title1, title2,
+                  bounds, name, 
+                  y_level, x_roi,
+                  cmap='viridis', show=False):
+    f = plt.figure()
+    gs = gridspec.GridSpec(7,2) # f.add_gridspec(2, 2)
+    # ax = [f.add_subplot(gs[0, 0]), f.add_subplot(gs[0, 1]),
+    #                   f.add_subplot(gs[1,:])              ];
+
+    ax = [plt.subplot(gs[0:4, 0:1]), plt.subplot(gs[0:4, 1:2]),
+                  plt.subplot(gs[4:,:])              ];
+
+    def cs_patch():
+        return patches.Polygon([[x_roi[0], y_level], [x_roi[1], y_level]],
+                              closed=False, color='r', lw=1)
+
+    # f, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
+    im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
+                       vmin=bounds[0], vmax=bounds[-1])
+
+    ax[0].add_patch(cs_patch())
+
+    ax[0].set_xlim((0, image1.shape[1]))
+    ax[0].set_ylim((image1.shape[0], 0))
+    ax[0].get_xaxis().set_visible(False)
+    ax[0].get_yaxis().set_visible(False)
+    ax[0].set_title(title1)
+    f.colorbar(im1, ax=ax[0], shrink=0.9,  boundaries=bounds)
+
+    im2 = ax[1].imshow(image2, cmap=cmap, interpolation='none', 
+                       vmin=bounds[0], vmax=bounds[-1])
+    ax[1].add_patch(cs_patch())
+    ax[1].set_xlim((0, image1.shape[1]))
+    ax[1].set_ylim((image1.shape[0], 0))
+    ax[1].get_xaxis().set_visible(False)
+    ax[1].get_yaxis().set_visible(False)
+    ax[1].set_title(title2)
+    f.colorbar(im2, ax=ax[1], shrink=0.9,  boundaries=bounds)
+
+    x = np.arange(x_roi[0], x_roi[1])
+    ax[2].plot(x, image1[y_level, x_roi[0]: x_roi[1]], 'b:')
+    ax[2].plot(x, image2[y_level, x_roi[0]: x_roi[1]], 'g--')
+    ax[2].set_xlim(x_roi)
+    ax[2].set_title(u'Кросс-секция y = %d' % y_level)
+    
+    min_tick = min(image1[y_level, x_roi[0]:x_roi[1]].min(),
+                   image2[y_level, x_roi[0]:x_roi[1]].min())
+
+    max_tick = max(image1[y_level, x_roi[0]:x_roi[1]].max(),
+                   image2[y_level, x_roi[0]:x_roi[1]].max())
+    ticks = np.linspace(min_tick, max_tick, 10)
+    ax[2].set_yticks(ticks)
+    ax[2].yaxis.set_major_formatter(ticker.FormatStrFormatter('%0.1f'))
+
+    ax[2].legend([title1, title2])
+    plt.tight_layout()
+    plt.savefig(name, dpi=300)
+    if show:
+        plt.show()
+    plt.close(f)
+    return
+
+
+
+vmin = -0.005
+vmax = 0.025
+bounds = np.linspace(vmin, vmax, 6)
+
+y_level = 630
+x_roi = (470, 800)
+
+tmp_fbp = 100 * fbp_res
+tmp_sft = 100 * soft_res
+bounds = 100 * bounds
+
+save_2_images_cs(tmp_fbp, tmp_sft, 
+              'FBP', u'ММО', 
+              bounds, 'pb_big__fbp_vs_soft__cs__viridis.png', cmap='viridis',
+              y_level=y_level, x_roi=x_roi, show=True)
+
+save_2_images_cs(tmp_fbp, tmp_sft, 
+              'FBP', u'ММО', 
+              bounds, 'pb_big__fbp_vs_soft__cs__pink.png', cmap='pink',
+              y_level=y_level, x_roi=x_roi, show=False)
+
+save_2_images_cs(tmp_fbp, tmp_sft, 
+              'FBP', u'ММО', 
+              bounds, 'pb_big__fbp_vs_soft__cs__hot.png', cmap='hot',
+              y_level=y_level, x_roi=x_roi, show=False)
+
+save_2_images_cs(tmp_fbp, tmp_sft, 
+              'FBP', u'ММО', 
+              bounds, 'pb_big__fbp_vs_soft__cs__gray.png', cmap='gray',
+              y_level=y_level, x_roi=x_roi, show=False)   
