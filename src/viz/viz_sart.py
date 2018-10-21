@@ -105,7 +105,7 @@ def plot_cross_sections(lines, titles, colors, lw, name='cs.png', title=None, st
     plt.plot(x, lines[2], colors[2], lw=lw[2])
     plt.legend(titles)
     plt.xlim((startx, startx + x.shape[0]))
-    plt.xlabel('писели')
+    plt.xlabel('пиксели')
     plt.ylabel('интенсивность')
 
     if title:
