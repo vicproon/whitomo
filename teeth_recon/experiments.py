@@ -219,6 +219,7 @@ def create_data_sample(i0, size, n_angles, n_samples):
         phantom[8,6] = 250
         phantom[8,7] = 250
 
+        # original = phantom / 100
         original = phantom
     else:
         original = create_phantom(size)
@@ -793,7 +794,7 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
         f.add_axes([0.51, 0.05, 0.44, 0.9])
     ]
     im1 = ax[0].imshow(image1, cmap=cmap, interpolation='none',
-                       vmin=bounds2[0], vmax=bounds2[-1])
+                       vmin=bounds1[0], vmax=bounds1[-1])
     ax[0].get_xaxis().set_visible(False)
     ax[0].get_yaxis().set_visible(False)
     ax[0].set_title(title1)
@@ -807,6 +808,7 @@ def save_image(image1, image2, title1, title2, name, bounds1, bounds2):
     f.colorbar(im2, ax=ax[1], shrink=0.9,  boundaries=bounds2)
 
     plt.savefig(name)
+    plt.close(f)
     return
 
 def prepare_weights_easy(size, n_angles):
@@ -879,17 +881,25 @@ def main():
     global x4
     global x3_stats
     global x4_stats
+    global cmap
     # e1_prepare_data()
     # run_all_experiments()
+    #i0 = 1e5
+    #n_angles = 35
+    #size_x = 10
+    #bound = 8
+
+
     i0 = 1e9
-    n_angles = 35
-    size_x = 10
+    n_angles = 90
+    size_x = 64
     bound = 8
 
-    # i0 = 1e3
-    # n_angles = 512
-    # size_x = 256
-    # bound = 2
+    #i0 = 1e3
+    #n_angles = 90
+    #size_x = 64
+    #bound = 2
+    
     d = datetime.datetime.now()
     np.random.seed(d.microsecond + d.hour + d.minute + d.second)
     item = create_data_sample(i0, size_x, n_angles, 1)
@@ -898,7 +908,7 @@ def main():
     pr = item['projections'][0]
     proj_id = item['projector']
     v = item['original']
-    sys.exit(0)
+    # sys.exit(0)
     # plt.figure();
     # 
     # plt.subplot(121)
@@ -924,9 +934,11 @@ def main():
     bounds1 =  np.arange(0, v_max, v_max/5)
     v_max = r.max()
     bounds2 =  np.arange(0, v_max, v_max/5)
-    bounds1 = np.linspace(0, 4.23, 9)
-    save_image(v, r.T, 'Phantom', 'Sinogram', 'sample.png', bounds1, bounds2)
-    sys.exit(0)
+    # bounds1 = np.linspace(0, 4.23, 9)
+    
+
+    
+    #sys.exit(0)
     x1 = sirt(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x2 = fbp(i0, pg, vg, pr, proj_id, bound, orig=item['original'])
     x1[x1 < 0] = 0
@@ -953,12 +965,19 @@ def main():
     np.savetxt('x5.nptxt', x5)
     np.savetxt('x6.nptxt', x6)
 
-    v_max = np.amax([x1.max(), x2.max(), x5.max(), x6.max()])
+    v_max = np.amax([x1.max(), x2.max(), x3.max(), x4.max()])
     bounds = np.arange(0.0, v_max, v_max/5)
-    save_image(x1, x2, 'SIRT', 'FBP', 'sample1.png', bounds, bounds)
-    save_image(x3, x4, 'QP with inequalities', 'QP without inequalities', 'sample2.png', bounds, bounds)
-    save_image(x5, x6, 'Soft Inequalities method', 'Missing Data method', 'sample3.png', bounds, bounds)
-    return x1, x2, x3, x4, x5, x6, x3_stats, x4_stats
+    # bounds = bounds1
+    cmap='viridis'
+    save_image(x1, x2, 'SIRT', 'FBP', 'sample1_viridis.png', bounds, bounds)
+    # save_image(x3, x4, 'QP with inequalities', 'QP without inequalities', 'sample2_viridis.png', bounds, bounds)
+    save_image(x3, x5, 'QP (Barrier method)', 'Soft ineqaulities', 'sample2_viridis.png', bounds, bounds)
+
+    cmap='viridis'
+    save_image(v, r, u'Фантом', u'Синограмма', 'sample_viridis.png', bounds1, bounds2)
+
+    #save_image(x5, x6, 'Soft Inequalities method', 'Missing Data method', 'sample3.png', bounds, bounds)
+    return v, x1, x2, x3, x5, bounds #, x5, x6, x3_stats, x4_stats
 
 
 
@@ -995,7 +1014,8 @@ def save_3_images(image1, image2, image3,
     f.colorbar(im3, ax=ax[2], shrink=0.9,  boundaries=bounds)
     plt.tight_layout()
     plt.savefig(name)
-    plt.show()
+    # plt.show()
+    plt.close(f)
     return
 
 def save_4_images(image1, image2, image3, image4,
@@ -1042,20 +1062,43 @@ def save_4_images(image1, image2, image3, image4,
 
     plt.tight_layout()
     plt.savefig(name)
-    plt.show()
+    # plt.show()
+    plt.close(f)
     return
 
 if __name__ == '__main__':
-    x1, x2, x3, x4, x5, x6, x3_stats, x4_stats = main()
+    # v, x1, x2, x3, x4, x5, x6, x3_stats, x4_stats = main()
+    v, x1, x2, x3, x4, bounds = main()
 
-    save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_pink.png')
+  #   v  = 100 * v[-1: :-1, :]
+  #   x1 = 100 * x1[-1::-1, :]
+  #   x2 = 100 * x2[-1::-1, :]
+  #   x3 = 100 * x3[-1::-1, :]
+  #   x4 = 100 * x4[-1::-1, :]
+
+    def print_stat(name, x):
+        print(name, ': ', 'bracket: %.2f +- %.2f' % (x[v==250].mean(), x[v==250].std()),
+                          'cross: %.2f +- %.2f' % (x[v==160].mean(), x[v==160].std()))
+
+    print_stat('FBP', x2)
+    print_stat('SIRT', x1)
+    print_stat(u'QP (с неравенствами)', x3)
+    print_stat(u'QP (без неравенств)', x4)
+
+    save_3_images(v, x2, x3, u'Фантом', 'FBP', u'QP (с неравенствами)', bounds, 'qp_threesome_pink.png')
     cmap = 'viridis'
-    save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome.png')
+    save_3_images(v, x2, x3, u'Фантом', 'FBP', u'QP (с неравенствами)', bounds, 'qp_threesome.png')
     cmap = 'hot'
-    save_3_images(v, x2, x3, u'Фантом', 'FBP', 'QP (barrier method)', bounds, 'qp_threesome_hot.png')
+    save_3_images(v, x2, x3, u'Фантом', 'FBP', u'QP (с неравенствами)', bounds, 'qp_threesome_hot.png')
 
-    cmap = 'pink'
-    save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome_pink.png')
+    # cmap = 'pink'
+    # save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome_pink.png')
+    # cmap = 'viridis'
+    # save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome.png')
+
+   #  cmap = 'pink'
+   #  save_4_images(x1, x2, x3, x4, u'SIRT (200 итераций)', 'FBP', u'QP (с неравенствами)', u'QP (без неравенств)', bounds, 'qp_foursome_pink.png')
+   #  cmap = 'viridis'
+   #  save_4_images(x1, x2, x3, x4, u'SIRT (200 итераций)', 'FBP', u'QP (с неравенствами)', u'QP (без неравенств)', bounds, 'qp_foursome.png')
     cmap = 'viridis'
-    save_4_images(v, x2, x3, x5, u'Фантом', 'FBP', 'QP (barrier method)', u'Soft inequalities', bounds, 'qp_foursome.png')
-
+    save_4_images(x1, x2, x3, x4, u'SIRT (200 итераций)', 'FBP', u'QP (barrier method)', u'Soft Inequalities', bounds, 'qp_foursome.png')
